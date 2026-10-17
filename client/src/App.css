@@ -1,5 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 
+/* =========================
+   Global styles
+========================= */
+
 :root {
   font-family: "DM Sans", sans-serif;
   color: #e9eaf2;
@@ -43,7 +47,9 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Main application */
+/* =========================
+   Application layout
+========================= */
 
 .app {
   display: flex;
@@ -62,7 +68,9 @@ button {
     var(--bg);
 }
 
-/* Header */
+/* =========================
+   Header
+========================= */
 
 .topbar {
   display: flex;
@@ -99,6 +107,13 @@ button {
   font-size: 23px;
 }
 
+.header-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .model-badge {
   display: inline-flex;
   align-items: center;
@@ -109,13 +124,6 @@ button {
   background: rgba(255, 255, 255, 0.025);
   color: #c7c8d5;
   font-size: 12px;
-}
-
-.header-status {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 .status-dot,
@@ -162,7 +170,9 @@ button {
   box-shadow: 0 0 8px rgba(255, 119, 119, 0.3);
 }
 
-/* Workspace */
+/* =========================
+   Workspace
+========================= */
 
 .workspace {
   display: flex;
@@ -176,7 +186,9 @@ button {
   overflow: hidden;
 }
 
-/* Welcome screen */
+/* =========================
+   Welcome screen
+========================= */
 
 .welcome {
   display: flex;
@@ -233,7 +245,9 @@ h1 {
   line-height: 1.7;
 }
 
-/* Conversation */
+/* =========================
+   Chat conversation
+========================= */
 
 .chat {
   display: flex;
@@ -280,7 +294,6 @@ h1 {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  align-self: stretch;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -291,15 +304,16 @@ h1 {
 
 .chat-message.user {
   align-self: flex-end;
+  width: fit-content;
+  max-width: 88%;
   margin-left: auto;
-  max-width: 80%;
 }
 
-/* Assistant messages: align to the left */
 .chat-message.assistant {
   align-self: flex-start;
-  margin-right: auto;
+  width: 100%;
   max-width: 100%;
+  margin-right: auto;
 }
 
 .message-role {
@@ -328,7 +342,9 @@ h1 {
   font-style: italic;
 }
 
-/* Markdown */
+/* =========================
+   Markdown content
+========================= */
 
 .markdown-content {
   min-width: 0;
@@ -452,25 +468,28 @@ h1 {
   height: auto;
 }
 
-/* Message composer */
+/* =========================
+   Composer
+========================= */
 
 .composer {
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
   width: 100%;
-  padding: 12px 14px 9px;
-  border: 1px solid #41414a;
+  min-width: 0;
+  padding: 12px 14px 8px;
+  border: 1px solid #41414b;
   border-radius: 28px;
-  background: #222226;
-  box-shadow: none;
+  background: #343434;
+  box-sizing: border-box;
   transition:
-    border-color 180ms ease,
-    background 180ms ease;
+    border-color 150ms ease,
+    background 150ms ease;
 }
 
 .composer:focus-within {
-  border-color: #55555f;
-  background: #262629;
-  box-shadow: none;
+  border-color: #595966;
 }
 
 .composer-main {
@@ -478,79 +497,199 @@ h1 {
   align-items: flex-end;
   gap: 10px;
   width: 100%;
+  min-width: 0;
 }
 
-.composer textarea {
+.composer-main textarea {
   display: block;
-  flex: 1;
+  flex: 1 1 0;
   width: 100%;
   min-width: 0;
   min-height: 28px;
   max-height: 180px;
-  padding: 5px 2px;
-  resize: none;
+  padding: 7px 2px;
   border: 0;
-  outline: none;
+  outline: 0;
   background: transparent;
-  color: #f2f2f3;
-  font-size: 16px;
-  line-height: 1.6;
+  color: #f0f0f4;
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.composer textarea::placeholder {
-  color: #a5a5ad;
+.composer-main textarea::-webkit-scrollbar {
+  display: none;
 }
 
-.composer textarea:disabled {
+.composer-main textarea::placeholder {
+  color: #a1a1ad;
+}
+
+.composer-main textarea:disabled {
   opacity: 0.65;
 }
 
-.composer textarea:focus {
-  outline: none;
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .composer-hint {
-  color: #85858e;
-  font-size: 10px;
+  color: #d5d5dd;
+  font-size: 24px;
+  line-height: 1;
 }
 
+/* =========================
+   Model selector
+========================= */
+
+.model-selector {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 160px;
+  border: 0;
+  border-radius: 18px;
+  background: #45454e;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.model-selector:hover {
+  background: #51515c;
+}
+
+.model-selector::after {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #d0d0dc;
+  border-bottom: 1.5px solid #d0d0dc;
+  content: "";
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.model-selector select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 160px;
+  padding: 9px 30px 9px 12px;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  background: transparent;
+  color: #f4f4f8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.model-selector select:focus-visible {
+  outline: 2px solid #b7a5ff;
+  outline-offset: 2px;
+}
+
+.model-selector select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.model-selector option {
+  background: #25252d;
+  color: #f3f3f8;
+}
+
+/* =========================
+   Send and stop buttons
+========================= */
+
 .send-button {
-  display: grid;
-  flex: 0 0 38px;
-  place-items: center;
-  width: 38px;
-  height: 38px;
+  display: inline-flex;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #b7a8ff;
+  background: #b7a5ff;
   color: #17151f;
   font-size: 25px;
   line-height: 1;
   cursor: pointer;
   transition:
-    background 160ms ease,
-    transform 160ms ease,
-    opacity 160ms ease;
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
 }
 
 .send-button:hover:not(:disabled) {
   transform: scale(1.04);
-  background: #c7bcff;
-}
-
-.send-button:focus-visible {
-  outline: 2px solid #c7bcff;
-  outline-offset: 3px;
 }
 
 .send-button:disabled {
-  background: #34343b;
-  color: #85858e;
-  opacity: 1;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-/* Errors and connection status */
+.send-button.is-generating {
+  background: #2563eb;
+  color: #ffffff;
+  opacity: 1;
+  cursor: pointer;
+}
+
+.send-button:focus-visible {
+  outline: 2px solid #b7a5ff;
+  outline-offset: 3px;
+}
+
+.stop-button {
+  align-self: center;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: 1px solid #393943;
+  border-radius: 18px;
+  background: #222226;
+  color: #f0f0f4;
+  cursor: pointer;
+}
+
+.stop-button:hover {
+  background: #303039;
+}
+
+/* =========================
+   Errors and status cards
+========================= */
 
 .error-message {
   flex: 0 0 auto;
@@ -564,14 +703,6 @@ h1 {
   color: #ffaaaa;
   font-size: 13px;
   line-height: 1.6;
-}
-
-.privacy-note {
-  flex: 0 0 auto;
-  margin: 7px 0 0;
-  color: #747587;
-  font-size: 11px;
-  text-align: center;
 }
 
 .connection-card {
@@ -636,7 +767,17 @@ h1 {
   color: #ff9292;
 }
 
-/* Footer */
+.privacy-note {
+  flex: 0 0 auto;
+  margin: 7px 0 0;
+  color: #747587;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* =========================
+   Footer and accessibility
+========================= */
 
 .footer {
   flex: 0 0 auto;
@@ -659,7 +800,9 @@ h1 {
   border: 0;
 }
 
-/* Responsive layout */
+/* =========================
+   Tablet and mobile
+========================= */
 
 @media (max-width: 600px) {
   .topbar {
@@ -715,15 +858,31 @@ h1 {
     border-radius: 23px;
   }
 
-  .composer textarea {
+  .composer-main {
+    gap: 7px;
+  }
+
+  .composer-main textarea {
     max-height: 140px;
     font-size: 16px;
   }
 
+  .composer-actions {
+    gap: 7px;
+  }
+
   .composer-hint {
-    max-width: 75%;
-    font-size: 9px;
-    line-height: 1.5;
+    font-size: 20px;
+  }
+
+  .model-selector {
+    max-width: 135px;
+  }
+
+  .model-selector select {
+    max-width: 135px;
+    padding-left: 9px;
+    font-size: 11px;
   }
 
   .connection-card {
@@ -751,7 +910,9 @@ h1 {
   }
 }
 
-/* Accessibility: reduced motion */
+/* =========================
+   Reduced motion
+========================= */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -762,19 +923,4 @@ h1 {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
-}
-
-.stop-button {
-  align-self: center;
-  margin-top: 8px;
-  padding: 8px 14px;
-  border: 1px solid #393943;
-  border-radius: 18px;
-  background: #222226;
-  color: #f0f0f4;
-  cursor: pointer;
-}
-
-.stop-button:hover {
-  background: #303039;
 }

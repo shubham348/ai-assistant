@@ -16,6 +16,7 @@ function App() {
   const [message, setMessage] = useState("Connecting to backend...");
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
@@ -42,7 +43,7 @@ function App() {
   }, []);
 
 
-  async function handleSend(userMessage: string): Promise<void> {
+  async function handleSend(userMessage: string, model: string): Promise<void> {
     setError("");
     const controller = new AbortController();
     setAbortController(controller);
@@ -62,7 +63,7 @@ function App() {
       const response = await fetch("http://localhost:3000/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, model: model }),
         signal: controller.signal,
       });
 
@@ -147,7 +148,8 @@ function App() {
 
         <ChatWindow messages={messages} isSending={isSending} />
 
-        <MessageComposer isSending={isSending} onSend={handleSend} />
+        <MessageComposer isSending={isSending} onSend={handleSend} selectedModel={selectedModel}
+          onModelChange={setSelectedModel} />
 
         {isSending && (
           <button

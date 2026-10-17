@@ -39,8 +39,7 @@ function ChatWindow({ messages, isSending }: ChatWindowProps) {
 
       {isSending && (
         <article className="chat-message assistant">
-          <span className="message-role">AI Assistant</span>
-          <p className="thinking">Thinking…</p>
+          <p className="thinking">Generating...</p>
         </article>
       )}
     </section>

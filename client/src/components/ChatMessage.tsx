@@ -18,6 +18,10 @@ type ChatMessageProps = {
 function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
 
+  if( message.content.trim() === ""){
+    return null;
+  }
+
   return (
     <article className={`chat-message ${message.role}`}>
       <span className="message-role">
