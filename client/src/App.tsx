@@ -35,54 +35,81 @@ function App() {
     checkBackend();
   }, []);
 
-  async function handleSend(userMessage: string): Promise<void> {
-    setError("");
+async function handleSend(userMessage: string): Promise<void> {
+  setError("");
 
-    setMessages((previous) => [
-      ...previous,
-      { role: "user", content: userMessage },
-    ]);
+  const assistantMessageIndex = messages.length + 1;
 
-    setIsSending(true);
+  setMessages((previous) => [
+    ...previous,
+    { role: "user", content: userMessage },
+    { role: "assistant", content: "" },
+  ]);
 
-    try {
-      const response = await fetch("http://localhost:3000/message", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: userMessage }),
-      });
+  setIsSending(true);
 
-      const data = await response.json();
+  try {
+    const response = await fetch("http://localhost:3000/message", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: userMessage }),
+    });
 
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to get an AI response");
-      }
-
-      const assistantReply =
-        typeof data.reply === "string"
-          ? data.reply
-          : typeof data.message === "string"
-            ? data.message
-            : null;
-
-      if (!assistantReply) {
-        throw new Error("The backend returned an unexpected response format");
-      }
-
-      setMessages((previous) => [
-        ...previous,
-        { role: "assistant", content: assistantReply },
-      ]);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Something went wrong"
-      );
-    } finally {
-      setIsSending(false);
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || "Failed to get an AI response");
     }
+
+    if (!response.body) {
+      throw new Error("The browser did not receive a response stream");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+
+      setMessages((previous) =>
+        previous.map((item, index) =>
+          index === assistantMessageIndex
+            ? { ...item, content: item.content + chunk }
+            : item
+        )
+      );
+    }
+
+    const remaining = decoder.decode();
+
+    if (remaining) {
+      setMessages((previous) =>
+        previous.map((item, index) =>
+          index === assistantMessageIndex
+            ? { ...item, content: item.content + remaining }
+            : item
+        )
+      );
+    }
+  } catch (err) {
+    setError(
+      err instanceof Error ? err.message : "Something went wrong"
+    );
+
+    setMessages((previous) =>
+      previous.filter(
+        (_, index) => index !== assistantMessageIndex
+      )
+    );
+  } finally {
+    setIsSending(false);
   }
+}
 
   return (
     <main className="app">

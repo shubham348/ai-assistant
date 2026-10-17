@@ -45,3 +45,79 @@ export async function checkOllama(): Promise<unknown> {
 
   return response.json();
 }
+
+
+export async function* streamAssistantReply(
+  message: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.OLLAMA_MODEL || "qwen2.5:3b",
+      messages: [{ role: "user", content: message }],
+      stream: true,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama returned HTTP ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Ollama returned an empty response stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+
+      buffer += decoder.decode(value, { stream: !done });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        const chunk = JSON.parse(line);
+        const content = chunk.message?.content;
+
+        if (typeof content === "string" && content.length > 0) {
+          yield content;
+        }
+
+        if (chunk.error) {
+          throw new Error(chunk.error);
+        }
+
+        if (chunk.done) return;
+      }
+
+      if (done) break;
+    }
+
+    if (buffer.trim()) {
+      const chunk = JSON.parse(buffer);
+
+      if (chunk.error) {
+        throw new Error(chunk.error);
+      }
+
+      const content = chunk.message?.content;
+      if (typeof content === "string" && content.length > 0) {
+        yield content;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
