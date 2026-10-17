@@ -289,6 +289,19 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.chat-message.user {
+  align-self: flex-end;
+  margin-left: auto;
+  max-width: 80%;
+}
+
+/* Assistant messages: align to the left */
+.chat-message.assistant {
+  align-self: flex-start;
+  margin-right: auto;
+  max-width: 100%;
+}
+
 .message-role {
   display: block;
   margin-bottom: 8px;
@@ -749,4 +762,19 @@ h1 {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.stop-button {
+  align-self: center;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: 1px solid #393943;
+  border-radius: 18px;
+  background: #222226;
+  color: #f0f0f4;
+  cursor: pointer;
+}
+
+.stop-button:hover {
+  background: #303039;
 }

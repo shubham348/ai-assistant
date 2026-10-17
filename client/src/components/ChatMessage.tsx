@@ -2,10 +2,14 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+
 export type ChatMessageData = {
+  id: string;
   role: "user" | "assistant";
   content: string;
+  status?: "streaming" | "complete" | "error" | "cancelled";
 };
+
 
 type ChatMessageProps = {
   message: ChatMessageData;

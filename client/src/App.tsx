@@ -8,11 +8,17 @@ import ChatWindow from "./components/ChatWindow";
 import MessageComposer from "./components/MessageComposer";
 import type { ChatMessageData } from "./components/ChatMessage";
 
+function createMessageId(): string {
+  return crypto.randomUUID();
+}
+
 function App() {
   const [message, setMessage] = useState("Connecting to backend...");
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
 
   useEffect(() => {
     async function checkBackend() {
@@ -35,81 +41,102 @@ function App() {
     checkBackend();
   }, []);
 
-async function handleSend(userMessage: string): Promise<void> {
-  setError("");
 
-  const assistantMessageIndex = messages.length + 1;
+  async function handleSend(userMessage: string): Promise<void> {
+    setError("");
+    const controller = new AbortController();
+    setAbortController(controller);
 
-  setMessages((previous) => [
-    ...previous,
-    { role: "user", content: userMessage },
-    { role: "assistant", content: "" },
-  ]);
+    const userId = createMessageId();
+    const assistantId = createMessageId();
 
-  setIsSending(true);
+    setMessages((previous) => [
+      ...previous,
+      { id: userId, role: "user", content: userMessage, status: "complete" },
+      { id: assistantId, role: "assistant", content: "", status: "streaming" },
+    ]);
 
-  try {
-    const response = await fetch("http://localhost:3000/message", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message: userMessage }),
-    });
+    setIsSending(true);
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      throw new Error(data?.error || "Failed to get an AI response");
-    }
+    try {
+      const response = await fetch("http://localhost:3000/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage }),
+        signal: controller.signal,
+      });
 
-    if (!response.body) {
-      throw new Error("The browser did not receive a response stream");
-    }
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Failed to get an AI response");
+      }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+      if (!response.body) {
+        throw new Error("The browser did not receive a response stream");
+      }
 
-    while (true) {
-      const { value, done } = await reader.read();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-      if (done) break;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+
+        if (chunk) {
+          setMessages((previous) =>
+            previous.map((item) =>
+              item.id === assistantId
+                ? { ...item, content: item.content + chunk }
+                : item
+            )
+          );
+        }
+      }
+
+      const remaining = decoder.decode();
 
       setMessages((previous) =>
-        previous.map((item, index) =>
-          index === assistantMessageIndex
-            ? { ...item, content: item.content + chunk }
+        previous.map((item) =>
+          item.id === assistantId
+            ? {
+              ...item,
+              content: item.content + remaining,
+              status: "complete",
+            }
             : item
         )
       );
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setMessages((previous) =>
+          previous.map((item) =>
+            item.id === assistantId
+              ? { ...item, status: "cancelled" }
+              : item
+          )
+        );
+      } else {
+        const errorMessage =
+          err instanceof Error ? err.message : "Something went wrong";
+
+        setError(errorMessage);
+
+        setMessages((previous) =>
+          previous.map((item) =>
+            item.id === assistantId
+              ? { ...item, status: "error" }
+              : item
+          )
+        );
+      }
+    } finally {
+      setAbortController(null);
+      setIsSending(false);
     }
-
-    const remaining = decoder.decode();
-
-    if (remaining) {
-      setMessages((previous) =>
-        previous.map((item, index) =>
-          index === assistantMessageIndex
-            ? { ...item, content: item.content + remaining }
-            : item
-        )
-      );
-    }
-  } catch (err) {
-    setError(
-      err instanceof Error ? err.message : "Something went wrong"
-    );
-
-    setMessages((previous) =>
-      previous.filter(
-        (_, index) => index !== assistantMessageIndex
-      )
-    );
-  } finally {
-    setIsSending(false);
   }
-}
+
 
   return (
     <main className="app">
@@ -120,10 +147,17 @@ async function handleSend(userMessage: string): Promise<void> {
 
         <ChatWindow messages={messages} isSending={isSending} />
 
-        <MessageComposer
-          isSending={isSending}
-          onSend={handleSend}
-        />
+        <MessageComposer isSending={isSending} onSend={handleSend} />
+
+        {isSending && (
+          <button
+            type="button"
+            onClick={() => abortController?.abort()}
+            className="stop-button"
+          >
+            Stop generating
+          </button>
+        )}
 
         {error && (
           <p className="error-message" role="alert">
@@ -131,7 +165,7 @@ async function handleSend(userMessage: string): Promise<void> {
           </p>
         )}
 
-  
+
       </section>
 
       <footer className="footer">

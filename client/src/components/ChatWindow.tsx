@@ -30,9 +30,9 @@ function ChatWindow({ messages, isSending }: ChatWindowProps) {
       aria-label="Conversation"
       aria-live="polite"
     >
-      {messages.map((message, index) => (
+      {messages.map((message) => (
         <ChatMessage
-          key={`${message.role}-${index}`}
+          key={message.id}
           message={message}
         />
       ))}
