@@ -74,8 +74,13 @@ export function getConfiguredModels() {
 }
 
 
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export async function* streamAssistantReply(
-  message: string,
+ messages: ConversationMessage[],
   model: string,
   signal?: AbortSignal
 ): AsyncGenerator<string> {
@@ -86,14 +91,18 @@ export async function* streamAssistantReply(
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: message }],
+      messages,
       stream: true,
     }),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(`Ollama returned HTTP ${response.status}`);
+    const errorDetails = await response.text();
+
+  throw new Error(
+    `Ollama returned HTTP ${response.status}: ${errorDetails}`
+  );
   }
 
   if (!response.body) {

@@ -58,12 +58,32 @@ function App() {
     ]);
 
     setIsSending(true);
+    const conversationMessages: Array<
+      Pick<ChatMessageData, "role" | "content">
+    > = [
+        ...messages
+          .filter(
+            (item) =>
+              item.status !== "error" &&
+              item.status !== "cancelled" &&
+              item.status !== "streaming" &&
+              item.content.trim().length > 0
+          )
+          .map((item) => ({
+            role: item.role,
+            content: item.content.trim(),
+          })),
 
+        {
+          role: "user",
+          content: userMessage.trim(),
+        },
+      ];
     try {
       const response = await fetch("http://localhost:3000/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, model: model }),
+        body: JSON.stringify({ messages: conversationMessages, model: model }),
         signal: controller.signal,
       });
 
