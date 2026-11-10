@@ -8,7 +8,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());//adds cross-origin response headers
-app.use(express.json()); //parses incoming JSON request bodies
+app.use(express.json({ limit: "100kb" }));//parses incoming JSON request bodies
 
 app.use(messageRoutes);
 app.get("/api/health", (_req, res) => {

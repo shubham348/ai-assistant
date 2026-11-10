@@ -1,7 +1,8 @@
 
 import { Router } from "express";
-import { ConversationMessage, streamAssistantReply } from "../services/ai.service.js";
+import {streamAssistantReply } from "../services/ai.service.js";
 import { getConfiguredModels } from "../services/ai.service.js";
+import { validateConversation } from "../validators/conversation.validator.js";
 const router = Router();
 
 router.get("/models", (_req, res) => {
@@ -15,31 +16,21 @@ router.get("/models", (_req, res) => {
   }
 });
 
+
 router.post("/message", async (req, res) => {
   const { model, messages } = req.body;
 
-  if (!Array.isArray(messages) || messages.length === 0) {
+  const validation = validateConversation(messages);
+
+  if (!validation.success) {
     res.status(400).json({
-      error: "Messages must be a non-empty array",
+      error: validation.error,
     });
     return;
   }
 
-  const isValidMessages = messages.every(
-    (item) =>
-      item &&
-      typeof item === "object" &&
-      (item.role === "user" || item.role === "assistant") &&
-      typeof item.content === "string" &&
-      item.content.trim().length > 0
-  );
+  const conversationMessages = validation.messages;
 
-  if (!isValidMessages) {
-    res.status(400).json({
-      error: "Invalid conversation messages",
-    });
-    return;
-  }
   const config = getConfiguredModels();
 
   const selectedModel =
@@ -61,12 +52,6 @@ router.post("/message", async (req, res) => {
       controller.abort();
     }
   });
-  const conversationMessages: ConversationMessage[] = messages.map(
-    ({ role, content }) => ({
-      role,
-      content: content.trim(),
-    })
-  );
 
 
   try {
@@ -80,6 +65,7 @@ router.post("/message", async (req, res) => {
       controller.signal
     )) {
       if (res.destroyed) break;
+
       res.write(chunk);
     }
 
@@ -94,11 +80,10 @@ router.post("/message", async (req, res) => {
         error: "Failed to generate an AI response",
       });
     } else if (!res.destroyed) {
-      // The stream has already started, so an HTTP error
-      // status can no longer be sent reliably.
       res.destroy(error instanceof Error ? error : undefined);
     }
   }
 });
+
 
 export default router;
