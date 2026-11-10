@@ -1,8 +1,12 @@
 
 import { Router } from "express";
-import {streamAssistantReply } from "../services/ai.service.js";
-import { getConfiguredModels } from "../services/ai.service.js";
+import {
+  streamAssistantReply,
+  getConfiguredModels,
+} from "../services/ai.service.js";
 import { validateConversation } from "../validators/conversation.validator.js";
+import { selectContextMessages } from "../services/context-manager.js";
+import { AI_CONFIG } from "../config/ai.config.js";
 const router = Router();
 
 router.get("/models", (_req, res) => {
@@ -59,8 +63,40 @@ router.post("/message", async (req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("X-Content-Type-Options", "nosniff");
 
-    for await (const chunk of streamAssistantReply(
+    // This tokenizer currently supports Qwen only.
+    if (selectedModel !== "qwen2.5:3b") {
+      res.status(400).json({
+        error: "Context management is not yet supported for this model.",
+      });
+      return;
+    }
+
+    const contextResult = await selectContextMessages(
       conversationMessages,
+      {
+        numCtx: AI_CONFIG.context.numCtx,
+        numPredict: AI_CONFIG.context.numPredict,
+        safetyMargin: AI_CONFIG.context.safetyMargin,
+      }
+    );
+
+    if (!contextResult.success) {
+      res.status(400).json({
+        error: contextResult.error,
+      });
+      return;
+    }
+
+    console.log("Context selection:", {
+      originalMessages: conversationMessages.length,
+      selectedMessages: contextResult.messages.length,
+      tokenCount: contextResult.tokenCount,
+      inputBudget: contextResult.inputBudget,
+      droppedTurns: contextResult.droppedTurns,
+    });
+
+    for await (const chunk of streamAssistantReply(
+      contextResult.messages,
       selectedModel,
       controller.signal
     )) {

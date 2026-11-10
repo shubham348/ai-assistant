@@ -1,3 +1,4 @@
+import { AI_CONFIG } from "../config/ai.config";
 
 const OLLAMA_URL = "http://localhost:11434";
 
@@ -80,7 +81,7 @@ export type ConversationMessage = {
 };
 
 export async function* streamAssistantReply(
- messages: ConversationMessage[],
+  messages: ConversationMessage[],
   model: string,
   signal?: AbortSignal
 ): AsyncGenerator<string> {
@@ -93,6 +94,10 @@ export async function* streamAssistantReply(
       model,
       messages,
       stream: true,
+      options: {
+        num_ctx: AI_CONFIG.context.numCtx,
+        num_predict: AI_CONFIG.context.numPredict,
+      },
     }),
     signal,
   });
@@ -100,9 +105,9 @@ export async function* streamAssistantReply(
   if (!response.ok) {
     const errorDetails = await response.text();
 
-  throw new Error(
-    `Ollama returned HTTP ${response.status}: ${errorDetails}`
-  );
+    throw new Error(
+      `Ollama returned HTTP ${response.status}: ${errorDetails}`
+    );
   }
 
   if (!response.body) {
