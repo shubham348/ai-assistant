@@ -1,4 +1,8 @@
 
+/* ========================================
+   CHAT WINDOW
+======================================== */
+
 .chat {
   display: flex;
   flex: 1 1 auto;
@@ -16,9 +20,16 @@
   overflow-x: hidden;
   overflow-y: auto;
 
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
+
   scrollbar-width: thin;
-  scrollbar-color: #454552 transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
+
+/* ========================================
+   CUSTOM SCROLLBAR
+======================================== */
 
 .chat::-webkit-scrollbar {
   width: 6px;
@@ -29,14 +40,20 @@
 }
 
 .chat::-webkit-scrollbar-thumb {
-  border-radius: 10px;
-  background: #454552;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 .chat::-webkit-scrollbar-thumb:hover {
-  background: #626273;
+  background: var(--muted);
+  background-clip: padding-box;
 }
 
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 760px) {
   .chat {

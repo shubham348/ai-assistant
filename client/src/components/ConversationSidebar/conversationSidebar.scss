@@ -1,111 +1,265 @@
 
-/* Sidebar container */
+/* ========================================
+   SIDEBAR CONTAINER
+======================================== */
 
 .conversation-sidebar {
   display: flex;
-  flex: 0 0 250px;
+  flex: 0 0 var(--sidebar-width);
   flex-direction: column;
-  width: 250px;
+
+  width: var(--sidebar-width);
   min-width: 0;
   min-height: 0;
+
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 20px 12px;
+
+  padding: 24px 14px;
+
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
-  background: rgba(20, 21, 29, 0.92);
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
-/* Sidebar header */
+.conversation-sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.conversation-sidebar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+/* ========================================
+   SIDEBAR HEADER
+======================================== */
 
 .sidebar-header {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 17px;
+
+  margin-bottom: 27px;
 }
 
 .sidebar-title {
-  padding: 0 8px;
+  padding: 0 9px;
+
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
-.sidebar-header button {
-  padding: 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(169, 155, 255, 0.1);
-  color: #d8d0ff;
+/* ========================================
+   NEW CHAT BUTTON
+======================================== */
+
+.new-chat-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 52px;
+
+  padding: 0 15px;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      115deg,
+      rgba(119, 117, 248, 0.17),
+      rgba(119, 117, 248, 0.07)
+    );
+
+  color: var(--text-primary);
+
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
   text-align: left;
+
   cursor: pointer;
+
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
-.sidebar-header button:hover {
-  background: rgba(169, 155, 255, 0.18);
+.new-chat-button:hover {
+  border-color: var(--accent);
+
+  background:
+    linear-gradient(
+      115deg,
+      rgba(119, 117, 248, 0.25),
+      rgba(119, 117, 248, 0.12)
+    );
+
+  box-shadow: 0 4px 18px rgba(119, 117, 248, 0.12);
 }
 
-/* Conversation list */
+.new-chat-button:active {
+  transform: scale(0.985);
+}
+
+.new-chat-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.new-chat-icon {
+  display: grid;
+  flex: 0 0 22px;
+  place-items: center;
+
+  width: 22px;
+  height: 22px;
+
+  color: var(--text-primary);
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.new-chat-label {
+  line-height: 1;
+}
+
+/* ========================================
+   CONVERSATION LIST
+======================================== */
 
 .conversation-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .conversation-item {
   display: flex;
   align-items: center;
   gap: 4px;
+
   min-width: 0;
-  border-radius: 9px;
+
+  border: 1px solid transparent;
+  border-radius: 10px;
+
+  background: transparent;
+
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
 }
 
-.conversation-item:hover,
-.conversation-item.active {
-  background: rgba(169, 155, 255, 0.12);
+.conversation-item:hover {
+  background: var(--panel-hover);
 }
+
+.conversation-item.active {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+}
+
+/* Conversation title */
 
 .conversation-select {
   flex: 1;
   min-width: 0;
-  padding: 11px 8px;
+
+  padding: 11px 9px;
+
   overflow: hidden;
+
   border: 0;
+  border-radius: 9px;
+
   background: transparent;
-  color: #d8d8e2;
+  color: var(--text-secondary);
+
+  font-family: var(--font-body);
   font-size: 12px;
+  font-weight: 500;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+
   cursor: pointer;
 }
 
+.conversation-item.active .conversation-select {
+  color: var(--text-primary);
+}
+
+.conversation-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Delete conversation */
+
 .conversation-delete {
+  display: grid;
   flex: 0 0 30px;
+  place-items: center;
+
+  width: 30px;
   height: 30px;
+
   border: 0;
   border-radius: 7px;
+
   background: transparent;
   color: var(--muted);
+
   font-size: 19px;
+
   cursor: pointer;
+
+  transition:
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .conversation-delete:hover {
-  background: rgba(255, 100, 100, 0.12);
-  color: #ff9292;
+  background: rgba(240, 120, 131, 0.12);
+  color: var(--danger);
 }
 
+.conversation-delete:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+/* Empty state */
+
 .sidebar-empty {
-  padding: 8px;
+  padding: 8px 9px;
+
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
 }
 
-/* Responsive sidebar */
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 760px) {
   .conversation-sidebar {
@@ -118,14 +272,33 @@
   .conversation-sidebar {
     flex-basis: 150px;
     width: 150px;
-    padding: 12px 6px;
+    padding: 16px 8px;
+  }
+
+  .sidebar-header {
+    gap: 13px;
   }
 
   .sidebar-title {
     font-size: 10px;
   }
 
+  .new-chat-button {
+    min-height: 44px;
+    gap: 7px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .new-chat-icon {
+    flex-basis: 18px;
+    width: 18px;
+    height: 18px;
+    font-size: 21px;
+  }
+
   .conversation-select {
+    padding: 10px 7px;
     font-size: 11px;
   }
 }
@@ -136,7 +309,9 @@
     width: 125px;
   }
 
-  .sidebar-header button {
-    font-size: 12px;
+  .new-chat-button {
+    gap: 5px;
+    padding: 0 7px;
+    font-size: 11px;
   }
 }

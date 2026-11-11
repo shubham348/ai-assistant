@@ -1,13 +1,15 @@
-
-/* Connection status card */
+/* =========================================
+   CONNECTION STATUS CARD
+========================================= */
 
 .connection-indicator {
   flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #65d6a0;
-  box-shadow: 0 0 10px rgba(101, 214, 160, 0.35);
+
+  background: var(--success);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--success) 40%, transparent);
 }
 
 .connection-card {
@@ -15,12 +17,15 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 12px;
+
   min-width: 0;
   margin-top: 4px;
-  padding: 10px 14px;
+  padding: 12px 14px;
+
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(20, 21, 29, 0.75);
+
+  background: var(--panel);
 }
 
 .connection-copy {
@@ -32,16 +37,18 @@
 }
 
 .connection-copy strong {
-  color: #e2e1ed;
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
 }
 
 .connection-copy span {
   overflow: hidden;
-  color: var(--muted);
+
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -49,23 +56,30 @@
 .connection-label {
   flex-shrink: 0;
   padding: 5px 8px;
+
   border-radius: 6px;
-  background: rgba(101, 214, 160, 0.09);
-  color: #81dcb0;
+
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
 
+/* Error state */
+
 .connection-error .connection-indicator {
-  background: #ff7777;
-  box-shadow: 0 0 10px rgba(255, 119, 119, 0.3);
+  background: var(--danger);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .connection-error .connection-label {
-  background: rgba(255, 119, 119, 0.1);
-  color: #ff9292;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
 }
+
+/* Responsive */
 
 @media (max-width: 600px) {
   .connection-card {

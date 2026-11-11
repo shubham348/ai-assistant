@@ -1,72 +1,147 @@
 
+/* ========================================
+   MODEL SELECTOR
+======================================== */
+
 .model-selector {
   position: relative;
+
   display: inline-flex;
   flex: 0 0 200px;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 
   width: 200px;
   min-width: 200px;
   min-height: 42px;
-  padding: 0 10px;
+  padding: 0 12px;
 
   border: 1px solid var(--border);
-  border-radius: 11px;
-  background: #343440;
+  border-radius: 12px;
 
-  transition: background 150ms ease, border-color 150ms ease;
+  background: var(--panel-elevated);
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .model-selector:hover {
-  background: #41414f;
-  border-color: #555563;
+  border-color: var(--border-strong);
+  background: var(--panel-hover);
 }
+
+.model-selector:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ========================================
+   LABEL
+======================================== */
 
 .model-selector label {
   flex: 0 0 auto;
+
   margin: 0;
-  color: #a9a9bb;
+
+  color: var(--muted);
+
+  font-family: var(--font-body);
   font-size: 11px;
+  font-weight: 500;
+
   white-space: nowrap;
 }
 
+/* ========================================
+   SELECT CONTROL
+======================================== */
+
 .model-selector select {
   flex: 1 1 auto;
+
   width: 100%;
   min-width: 0;
-  padding: 8px 18px 8px 0;
+  padding: 8px 19px 8px 0;
 
   appearance: none;
+  -webkit-appearance: none;
+
   border: 0;
   outline: 0;
   background: transparent;
 
-  color: #e2e1ed;
-  font-family: inherit;
+  color: var(--text-primary);
+  color-scheme: dark;
+
+  font-family: var(--font-body);
   font-size: 11px;
+  font-weight: 600;
+
   text-align: right;
   text-overflow: ellipsis;
+
   cursor: pointer;
 }
+
+.model-selector select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ========================================
+   CUSTOM CHEVRON
+======================================== */
 
 .model-selector::after {
   position: absolute;
   top: 50%;
-  right: 10px;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid #c7c8d5;
-  border-bottom: 1.5px solid #c7c8d5;
+  right: 13px;
+
+  width: 7px;
+  height: 7px;
+
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+
   content: "";
   pointer-events: none;
-  transform: translateY(-65%) rotate(45deg);
+
+  transform: translateY(-70%) rotate(45deg);
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
-.model-selector option {
-  background: #202027;
-  color: #e2e1ed;
+.model-selector:focus-within::after {
+  border-color: var(--accent-hover);
+  transform: translateY(-30%) rotate(225deg);
 }
+
+/* ========================================
+   NATIVE DROPDOWN OPTIONS
+======================================== */
+
+.model-selector option {
+  padding: 10px 12px;
+
+  background: var(--panel-elevated);
+  color: var(--text-primary);
+
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.model-selector option:checked {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 560px) {
   .model-selector {

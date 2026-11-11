@@ -1,22 +1,41 @@
+
+/* ========================================
+   MESSAGE COMPOSER
+======================================== */
+
 .composer {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
+
   width: 100%;
   max-width: 820px;
   margin: 0 auto;
   padding: 13px 16px 10px;
-  border: 1px solid #454552;
+
+  border: 1px solid var(--border-strong);
   border-radius: 24px;
-  background: #202027;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.16);
-  transition: border-color 150ms ease, background 150ms ease;
+
+  background: var(--panel-elevated);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .composer:focus-within {
-  border-color: #77718f;
-  background: #24242d;
+  border-color: var(--accent);
+  background: var(--panel-hover);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 10px 35px rgba(0, 0, 0, 0.2);
 }
+
+/* ========================================
+   INPUT AREA
+======================================== */
 
 .composer-main {
   display: flex;
@@ -32,18 +51,21 @@
   min-height: 28px;
   max-height: 200px;
   padding: 7px 2px;
+
   resize: none;
   border: 0;
   outline: 0;
+
   background: transparent;
-  color: #f4f2ff;
-  font-family: inherit;
+  color: var(--text-primary);
+
+  font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.55;
 }
 
 .composer-main textarea::placeholder {
-  color: #9292a1;
+  color: var(--muted);
 }
 
 .composer-main textarea:disabled {
@@ -57,8 +79,12 @@
 
 .composer-main textarea::-webkit-scrollbar-thumb {
   border-radius: 5px;
-  background: #454552;
+  background: var(--border-strong);
 }
+
+/* ========================================
+   COMPOSER FOOTER
+======================================== */
 
 .composer-footer {
   display: flex;
@@ -68,20 +94,21 @@
   padding-top: 9px;
 }
 
-
 .composer-hint {
   display: none;
+  color: var(--muted);
+  font-size: 11px;
 }
+
 .composer-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.composer-hint {
-  color: var(--muted);
-  font-size: 11px;
-}
+/* ========================================
+   SEND BUTTON
+======================================== */
 
 .send-button {
   display: grid;
@@ -94,8 +121,8 @@
   border: 0;
   border-radius: 50%;
 
-  background: #a99bff;
-  color: #171321;
+  background: var(--accent);
+  color: #ffffff;
 
   font-size: 25px;
   font-weight: 500;
@@ -104,11 +131,13 @@
 
   transition:
     background 150ms ease,
+    color 150ms ease,
     transform 150ms ease,
     opacity 150ms ease;
 }
 
 .send-button:hover:not(:disabled) {
+  background: var(--accent-hover);
   transform: scale(1.04);
 }
 
@@ -117,7 +146,14 @@
   opacity: 0.4;
 }
 
-/* Generating state */
+.send-button:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 3px;
+}
+
+/* ========================================
+   GENERATING / STOP STATE
+======================================== */
 
 .send-button.is-generating {
   background: #2563eb;
@@ -140,10 +176,9 @@
   background: #ffffff;
 }
 
-
-.stop-button {
-  display: none;
-}
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 560px) {
   .composer {

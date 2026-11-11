@@ -1,4 +1,6 @@
+
 import "./conversationSidebar.scss";
+
 export type Conversation = {
   id: string;
   title: string;
@@ -29,8 +31,15 @@ function ConversationSidebar({
       <div className="sidebar-header">
         <span className="sidebar-title">Your conversations</span>
 
-        <button type="button" onClick={onNewChat}>
-          + New chat
+        <button
+          type="button"
+          className="new-chat-button"
+          onClick={onNewChat}
+        >
+          <span className="new-chat-icon" aria-hidden="true">
+            +
+          </span>
+          <span className="new-chat-label">New chat</span>
         </button>
       </div>
 

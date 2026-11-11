@@ -1,24 +1,36 @@
 
+/* ========================================
+   HEADER
+======================================== */
 
 .topbar {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+
   width: 100%;
   min-height: 76px;
   padding: 0 6%;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  border-bottom: 1px solid var(--border);
+
+  background: rgba(13, 16, 26, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
+/* ========================================
+   BRAND
+======================================== */
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 11px;
 
-  color: #f4f2ff;
-  font-family: "Manrope", sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
   font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.4px;
@@ -33,13 +45,22 @@
   width: 34px;
   height: 34px;
 
+  border: 1px solid rgba(119, 117, 248, 0.3);
   border-radius: 11px;
-  background: linear-gradient(135deg, #b8a8ff, #7964dc);
 
-  color: #171321;
+  background: linear-gradient(
+    135deg,
+    var(--accent),
+    #5553c9
+  );
+
+  color: #ffffff;
   font-size: 23px;
 }
 
+/* ========================================
+   HEADER STATUS
+======================================== */
 
 .header-status {
   display: flex;
@@ -48,6 +69,63 @@
   gap: 12px;
 }
 
+/* ========================================
+   CONNECTION PILL
+======================================== */
+
+.connection-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 12px;
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full, 999px);
+
+  background: var(--panel);
+  color: var(--text-secondary);
+
+  font-size: 12px;
+  white-space: nowrap;
+
+  transition:
+    background var(--transition-fast, 150ms ease),
+    border-color var(--transition-fast, 150ms ease);
+}
+
+.connection-pill.online {
+  border-color: rgba(57, 212, 154, 0.2);
+}
+
+.connection-pill.offline {
+  border-color: rgba(240, 120, 131, 0.25);
+  color: var(--danger);
+}
+
+/* Status indicator */
+
+.status-dot {
+  display: inline-block;
+  flex-shrink: 0;
+
+  width: 8px;
+  height: 8px;
+
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 9px rgba(57, 212, 154, 0.4);
+}
+
+.connection-pill.offline .status-dot {
+  background: var(--danger);
+  box-shadow: 0 0 9px rgba(240, 120, 131, 0.35);
+}
+
+/* ========================================
+   MODEL BADGE
+======================================== */
 
 .model-badge {
   display: inline-flex;
@@ -57,13 +135,17 @@
   padding: 8px 12px;
 
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-full, 999px);
 
-  background: rgba(255, 255, 255, 0.025);
-  color: #c7c8d5;
+  background: var(--panel);
+  color: var(--text-secondary);
+
   font-size: 12px;
 }
 
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 760px) {
   .topbar {
@@ -81,6 +163,11 @@
     gap: 6px;
   }
 
+  .connection-pill {
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+
   .model-badge {
     padding: 7px 8px;
     font-size: 10px;
@@ -92,65 +179,7 @@
     gap: 7px;
     font-size: 14px;
   }
-}
 
-
-.connection-pill {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-
-  padding: 8px 12px;
-
-  border: 1px solid var(--border);
-  border-radius: 999px;
-
-  background: rgba(255, 255, 255, 0.025);
-  color: #c7c8d5;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-
-.status-dot {
-  display: inline-block;
-  flex-shrink: 0;
-
-  width: 8px;
-  height: 8px;
-
-  border-radius: 50%;
-  background: #65d6a0;
-  box-shadow: 0 0 9px rgba(101, 214, 160, 0.4);
-}
-
-
-.connection-pill.online .status-dot {
-  background: #65d6a0;
-  box-shadow: 0 0 9px rgba(101, 214, 160, 0.4);
-}
-
-
-.connection-pill.offline {
-  color: #ffaaaa;
-}
-
-.connection-pill.offline .status-dot {
-  background: #ff7777;
-  box-shadow: 0 0 9px rgba(255, 119, 119, 0.35);
-}
-
-/* Responsive */
-
-@media (max-width: 600px) {
-  .connection-pill {
-    padding: 7px 9px;
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 420px) {
   .connection-pill {
     max-width: 34px;
     padding: 8px;

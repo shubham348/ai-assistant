@@ -1,22 +1,213 @@
 
 :root {
-  font-family: "DM Sans", sans-serif;
-  color: #e9eaf2;
-  background: #0c0d12;
+  /* =========================================
+     1. CORE BACKGROUNDS
+  ========================================= */
+
+  --bg: #080a12;
+  --sidebar-bg: #0d101a;
+  --header-bg: #0b0e18;
+
+  --panel: #131725;
+  --panel-elevated: #1b2030;
+  --panel-hover: #252b3d;
+  --panel-active: #222940;
+
+  /* =========================================
+     2. SURFACE GRADIENTS
+  ========================================= */
+
+  --app-gradient:
+    radial-gradient(
+      ellipse at 55% 45%,
+      rgba(42, 49, 105, 0.16),
+      transparent 55%
+    ),
+    linear-gradient(145deg, #0b0e19, #080a12);
+
+  --sidebar-gradient:
+    linear-gradient(180deg, #101421, #0d101a);
+
+  --new-chat-gradient:
+    linear-gradient(135deg, #242c49, #1a2035);
+
+  --new-chat-hover-gradient:
+    linear-gradient(135deg, #303b60, #222b48);
+
+  --composer-gradient:
+    linear-gradient(145deg, #191f35, #111729);
+
+  --composer-focus-gradient:
+    linear-gradient(145deg, #202744, #141b32);
+
+  --model-selector-gradient:
+    linear-gradient(135deg, #252d48, #1b2238);
+
+  --accent-gradient:
+    linear-gradient(135deg, #8985ff, #5d63e8);
+
+  /* =========================================
+     3. BORDERS
+  ========================================= */
+
+  --border: #2b3247;
+  --border-subtle: rgba(112, 124, 165, 0.16);
+  --border-strong: #3a4563;
+
+  --border-accent: rgba(119, 117, 248, 0.48);
+  --border-accent-focus: rgba(137, 133, 255, 0.78);
+
+  /* =========================================
+     4. TYPOGRAPHY
+  ========================================= */
+
+  --text-primary: #f3f4fa;
+  --text-secondary: #a5aec3;
+  --text-muted: #737e96;
+  --text-disabled: #555f75;
+
+  --font-body: "DM Sans", sans-serif;
+  --font-heading: "Manrope", sans-serif;
+
+  /* =========================================
+     5. ACCENT COLOURS
+  ========================================= */
+
+  --accent: #7775f8;
+  --accent-hover: #9290ff;
+  --accent-strong: #8985ff;
+  --accent-soft: rgba(119, 117, 248, 0.14);
+  --accent-glow: rgba(119, 117, 248, 0.18);
+
+  /* =========================================
+     6. STATUS COLOURS
+  ========================================= */
+
+  --success: #39d49a;
+  --success-soft: rgba(57, 212, 154, 0.12);
+
+  --danger: #f07883;
+  --danger-soft: rgba(240, 120, 131, 0.12);
+
+  --warning: #e8b86b;
+  --warning-soft: rgba(232, 184, 107, 0.12);
+
+  /* =========================================
+     7. HEADER
+  ========================================= */
+
+  --header-height: 76px;
+  --header-border: var(--border-subtle);
+
+  /* =========================================
+     8. SIDEBAR
+  ========================================= */
+
+  --sidebar-width: 250px;
+  --sidebar-item-radius: 10px;
+  --sidebar-item-padding: 11px 12px;
+
+  --sidebar-item-bg: transparent;
+  --sidebar-item-hover: rgba(119, 117, 248, 0.09);
+  --sidebar-item-active: rgba(119, 117, 248, 0.17);
+
+  --sidebar-button-radius: 13px;
+  --sidebar-button-border: var(--border-strong);
+
+  /* =========================================
+     9. COMPOSER
+  ========================================= */
+
+  --composer-radius: 25px;
+  --composer-border: var(--border-strong);
+  --composer-border-focus: var(--border-accent-focus);
+
+  --composer-shadow:
+    0 14px 45px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+  --composer-focus-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 14px 45px rgba(0, 0, 0, 0.25);
+
+  /* =========================================
+     10. MODEL SELECTOR
+  ========================================= */
+
+  --model-bg: var(--model-selector-gradient);
+  --model-border: var(--border);
+  --model-text: var(--text-primary);
+
+  /* =========================================
+     11. BUTTONS
+  ========================================= */
+
+  --button-primary-bg: var(--accent-gradient);
+  --button-primary-text: #ffffff;
+
+  --button-radius: 12px;
+  --button-transition: 180ms ease;
+
+  /* =========================================
+     12. SHADOWS AND LIGHTING
+  ========================================= */
+
+  --shadow-soft: 0 8px 28px rgba(0, 0, 0, 0.18);
+  --shadow-elevated: 0 16px 45px rgba(0, 0, 0, 0.28);
+
+  --glow-accent:
+    0 0 35px rgba(119, 117, 248, 0.13);
+
+  /* =========================================
+     13. BACKGROUND IMAGE - FUTURE OPTION
+  ========================================= */
+
+  --app-background-image: none;
+  --app-background-overlay: rgba(8, 10, 18, 0.78);
+
+  /* =========================================
+     14. LAYOUT AND SPACING
+  ========================================= */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --content-max-width: 1050px;
+
+  /* =========================================
+     15. RADIUS
+  ========================================= */
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
+  --radius-full: 999px;
+
+  /* =========================================
+     16. MOTION
+  ========================================= */
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 180ms ease;
+  --transition-slow: 250ms ease;
+
+  /* =========================================
+     17. GLOBAL DEFAULTS
+  ========================================= */
+
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  --bg: #0c0d12;
-  --panel: #14151d;
-  --border: #292a35;
-  --muted: #9092a3;
-  --accent: #a99bff;
-
-  --font-body: "DM Sans", sans-serif;
-  --font-heading: "Manrope", sans-serif;
-
-  --sidebar-width: 250px;
 }

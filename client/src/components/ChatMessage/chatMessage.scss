@@ -1,4 +1,8 @@
 
+/* ========================================
+   CHAT MESSAGE BASE
+======================================== */
+
 .chat-message {
   display: flex;
   flex-direction: column;
@@ -8,21 +12,35 @@
   max-width: 100%;
   min-width: 0;
 
-  color: #e2e1ed;
+  color: var(--text-primary);
   font-size: 15px;
   line-height: 1.85;
 }
+
+/* ========================================
+   USER MESSAGE
+======================================== */
 
 .chat-message.user {
   align-self: flex-end;
   max-width: 82%;
   padding: 13px 17px;
 
-  border: 1px solid rgba(169, 155, 255, 0.16);
+  border: 1px solid var(--border-strong);
   border-radius: 18px 18px 5px 18px;
 
-  background: rgba(169, 155, 255, 0.1);
+  background: linear-gradient(
+    145deg,
+    rgba(119, 117, 248, 0.16),
+    rgba(119, 117, 248, 0.08)
+  );
+
+  color: var(--text-primary);
 }
+
+/* ========================================
+   ASSISTANT MESSAGE
+======================================== */
 
 .chat-message.assistant {
   align-self: flex-start;
@@ -30,24 +48,29 @@
   max-width: 100%;
 }
 
+/* Message role */
 
 .message-role {
   display: flex;
   align-items: center;
   gap: 8px;
 
-  color: #aaa0ed;
+  color: var(--accent-hover);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
 }
 
+/* ========================================
+   MARKDOWN CONTENT
+======================================== */
 
 .markdown-content {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #d8d8e2;
+
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.85;
 }
@@ -60,17 +83,22 @@
   margin-bottom: 0;
 }
 
+/* Paragraphs */
+
 .markdown-content p {
   margin: 0 0 14px;
 }
+
+/* Headings */
 
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,
 .markdown-content h4 {
   margin: 24px 0 12px;
-  color: #f0eff8;
-  font-family: "Manrope", sans-serif;
+
+  color: var(--text-primary);
+  font-family: var(--font-heading);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -91,6 +119,8 @@
   font-size: 15px;
 }
 
+/* Lists */
+
 .markdown-content ul,
 .markdown-content ol {
   margin: 10px 0 18px;
@@ -103,39 +133,53 @@
 }
 
 .markdown-content li::marker {
-  color: #a99bff;
+  color: var(--accent);
 }
 
+/* Emphasis */
+
 .markdown-content strong {
-  color: #f0eff8;
+  color: var(--text-primary);
   font-weight: 700;
 }
 
 .markdown-content em {
-  color: #c9c4e8;
+  color: var(--text-secondary);
 }
 
+/* Links */
+
 .markdown-content a {
-  color: #b8aaff;
+  color: var(--accent-hover);
   text-decoration: underline;
   text-underline-offset: 3px;
+  transition: color 150ms ease;
 }
 
 .markdown-content a:hover {
-  color: #d1c8ff;
+  color: var(--text-primary);
 }
 
+/* ========================================
+   INLINE CODE
+======================================== */
 
 .markdown-content :not(pre) > code {
   padding: 3px 6px;
-  border: 1px solid rgba(169, 155, 255, 0.15);
+
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: rgba(169, 155, 255, 0.1);
-  color: #d2c8ff;
+
+  background: var(--panel-elevated);
+  color: var(--accent-hover);
+
   font-family: "Consolas", "Monaco", monospace;
   font-size: 0.88em;
 }
 
+/* ========================================
+   CODE BLOCKS
+======================================== */
 
 .markdown-content pre {
   max-width: 100%;
@@ -143,38 +187,49 @@
   padding: 16px;
   overflow-x: auto;
 
-  border: 1px solid #292a35;
+  border: 1px solid var(--border);
   border-radius: 12px;
 
-  background: #111118;
+  background: var(--bg);
+
   scrollbar-width: thin;
-  scrollbar-color: #454552 transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .markdown-content pre code {
   padding: 0;
+
   border: 0;
   background: transparent;
-  color: #d8d8e2;
+  color: var(--text-primary);
+
   font-family: "Consolas", "Monaco", monospace;
   font-size: 13px;
   line-height: 1.7;
 }
 
+/* ========================================
+   BLOCKQUOTES
+======================================== */
 
 .markdown-content blockquote {
   margin: 16px 0;
   padding: 10px 16px;
-  border-left: 3px solid #a99bff;
+
+  border-left: 3px solid var(--accent);
   border-radius: 0 8px 8px 0;
-  background: rgba(169, 155, 255, 0.06);
-  color: #bcbaca;
+
+  background: var(--accent-soft);
+  color: var(--text-secondary);
 }
 
 .markdown-content blockquote > :last-child {
   margin-bottom: 0;
 }
 
+/* ========================================
+   TABLES
+======================================== */
 
 .markdown-content table {
   display: block;
@@ -182,43 +237,60 @@
   max-width: 100%;
   margin: 16px 0;
   overflow-x: auto;
+
   border-collapse: collapse;
+
   font-size: 13px;
 }
 
 .markdown-content th,
 .markdown-content td {
   padding: 10px 12px;
-  border: 1px solid #343440;
+
+  border: 1px solid var(--border);
+
   text-align: left;
 }
 
 .markdown-content th {
-  background: #202027;
-  color: #f0eff8;
+  background: var(--panel-elevated);
+  color: var(--text-primary);
   font-weight: 700;
 }
 
 .markdown-content td {
   background: rgba(255, 255, 255, 0.015);
+  color: var(--text-secondary);
 }
 
+/* ========================================
+   DIVIDERS
+======================================== */
 
 .markdown-content hr {
   margin: 22px 0;
+
   border: 0;
-  border-top: 1px solid #343440;
+  border-top: 1px solid var(--border);
 }
 
+/* ========================================
+   IMAGES
+======================================== */
 
 .markdown-content img {
   display: block;
   max-width: 100%;
   height: auto;
   margin: 14px 0;
+
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 
+/* ========================================
+   RESPONSIVE
+======================================== */
 
 @media (max-width: 560px) {
   .chat-message {
