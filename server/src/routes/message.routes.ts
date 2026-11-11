@@ -5,8 +5,20 @@ import {
   getConfiguredModels,
 } from "../services/ai.service.js";
 import { validateConversation } from "../validators/conversation.validator.js";
-import { selectContextMessages } from "../services/context-manager.js";
+import {
+  selectContextMessages,
+} from "../services/context-manager.js";
 import { AI_CONFIG } from "../config/ai.config.js";
+
+import {
+  getConversationById,
+} from "../database/conversation.repository.js";
+
+import {
+  createMessage,
+  getMessagesByConversationId,
+} from "../database/message.repository.js";
+
 const router = Router();
 
 router.get("/models", (_req, res) => {
@@ -20,59 +32,82 @@ router.get("/models", (_req, res) => {
   }
 });
 
-
 router.post("/message", async (req, res) => {
-  const { model, messages } = req.body;
+  const { conversationId, messages } = req.body ?? {};
 
+  // Validate conversation ID.
+  if (typeof conversationId !== "string" || !conversationId.trim()) {
+    return res.status(400).json({
+      error: "A valid conversationId is required",
+    });
+  }
+
+  // Validate incoming messages.
   const validation = validateConversation(messages);
 
   if (!validation.success) {
-    res.status(400).json({
+    return res.status(400).json({
       error: validation.error,
     });
-    return;
   }
 
-  const conversationMessages = validation.messages;
+  const incomingMessages = validation.messages;
+  const latestMessage = incomingMessages[incomingMessages.length - 1];
 
-  const config = getConfiguredModels();
-
-  const selectedModel =
-    typeof model === "string" && model.trim()
-      ? model.trim()
-      : config.defaultModel;
-
-  if (!config.models.includes(selectedModel)) {
-    res.status(400).json({
-      error: "The selected model is not allowed",
+  // Each request must end with a new user message.
+  if (!latestMessage || latestMessage.role !== "user") {
+    return res.status(400).json({
+      error: "The latest message must be from the user",
     });
-    return;
   }
-
-  const controller = new AbortController();
-
-  res.on("close", () => {
-    if (!res.writableEnded) {
-      controller.abort();
-    }
-  });
-
 
   try {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Find the conversation in SQLite.
+    const conversation = getConversationById(conversationId);
 
-    // This tokenizer currently supports Qwen only.
+    if (!conversation) {
+      return res.status(404).json({
+        error: "Conversation not found",
+      });
+    }
+
+    const config = getConfiguredModels();
+
+    // The model saved when the conversation was created is authoritative.
+    const selectedModel = conversation?.model as string;
+
+    if (!config.models.includes(selectedModel)) {
+      return res.status(400).json({
+        error: "The conversation model is no longer configured",
+      });
+    }
+
+    // Load previous messages from SQLite.
+    const storedMessages = getMessagesByConversationId(conversationId);
+
+    const conversationHistory = storedMessages.map((message: any) => ({
+      role: message.role as "user" | "assistant",
+      content: message.content as string,
+    }));
+
+    // Add only the latest user message.
+    const updatedHistory = [
+      ...conversationHistory,
+      {
+        role: "user" as const,
+        content: latestMessage.content,
+      },
+    ];
+
+    // Apply the existing context-window management.
     if (selectedModel !== "qwen2.5:3b") {
-      res.status(400).json({
+      return res.status(400).json({
         error: "Context management is not yet supported for this model.",
       });
-      return;
     }
 
     const contextResult = await selectContextMessages(
-      conversationMessages,
+      updatedHistory,
       {
         numCtx: AI_CONFIG.context.numCtx,
         numPredict: AI_CONFIG.context.numPredict,
@@ -81,20 +116,41 @@ router.post("/message", async (req, res) => {
     );
 
     if (!contextResult.success) {
-      res.status(400).json({
+      return res.status(400).json({
         error: contextResult.error,
       });
-      return;
     }
 
     console.log("Context selection:", {
-      originalMessages: conversationMessages.length,
+      originalMessages: updatedHistory.length,
       selectedMessages: contextResult.messages.length,
       tokenCount: contextResult.tokenCount,
       inputBudget: contextResult.inputBudget,
       droppedTurns: contextResult.droppedTurns,
     });
 
+    // Save the user message before generation.
+    createMessage(
+      conversationId,
+      "user",
+      latestMessage.content
+    );
+
+    const controller = new AbortController();
+
+    res.on("close", () => {
+      if (!res.writableEnded) {
+        controller.abort();
+      }
+    });
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    let assistantReply = "";
+
+    // Stream the response and collect the complete answer.
     for await (const chunk of streamAssistantReply(
       contextResult.messages,
       selectedModel,
@@ -102,24 +158,31 @@ router.post("/message", async (req, res) => {
     )) {
       if (res.destroyed) break;
 
+      assistantReply += chunk;
       res.write(chunk);
     }
 
-    if (!res.destroyed) {
+    // Save only a completed, non-empty assistant response.
+    if (!res.destroyed && !controller.signal.aborted && assistantReply) {
+      createMessage(
+        conversationId,
+        "assistant",
+        assistantReply
+      );
+
       res.end();
     }
   } catch (error) {
-    console.error("Streaming error:", error);
+    console.error("Streaming/persistence error:", error);
 
     if (!res.headersSent) {
       res.status(502).json({
-        error: "Failed to generate an AI response",
+        error: "Failed to process the conversation",
       });
     } else if (!res.destroyed) {
       res.destroy(error instanceof Error ? error : undefined);
     }
   }
 });
-
 
 export default router;

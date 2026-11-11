@@ -6,7 +6,13 @@ import Header from "./components/Header";
 import Welcome from "./components/Welcome";
 import ChatWindow from "./components/ChatWindow";
 import MessageComposer from "./components/MessageComposer";
+import ConversationSidebar, {
+  type Conversation,
+} from "./components/ConversationSidebar";
+
 import type { ChatMessageData } from "./components/ChatMessage";
+
+const API_URL = "http://localhost:3000";
 
 function createMessageId(): string {
   return crypto.randomUUID();
@@ -15,16 +21,49 @@ function createMessageId(): string {
 function App() {
   const [message, setMessage] = useState("Connecting to backend...");
   const [error, setError] = useState("");
+
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] =
+    useState<string | null>(null);
+
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] =
+    useState(false);
+
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
 
+  // Load all conversations from SQLite.
+  async function loadConversations() {
+    setIsLoadingConversations(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/conversations`);
+
+      if (!response.ok) {
+        throw new Error("Failed to load conversations");
+      }
+
+      const data = await response.json();
+
+      setConversations(data.conversations);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load conversations"
+      );
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }
+
+  // Check backend and load saved conversations.
   useEffect(() => {
-    async function checkBackend() {
+    async function initializeApp() {
       try {
-        const response = await fetch("http://localhost:3000/api/health");
+        const response = await fetch(`${API_URL}/api/health`);
 
         if (!response.ok) {
           throw new Error(`HTTP error: ${response.status}`);
@@ -32,6 +71,8 @@ function App() {
 
         const data = await response.json();
         setMessage(data.message);
+
+        await loadConversations();
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Something went wrong"
@@ -39,12 +80,96 @@ function App() {
       }
     }
 
-    checkBackend();
+    initializeApp();
   }, []);
 
+  function handleNewChat() {
+    if (isSending) return;
 
-  async function handleSend(userMessage: string, model: string): Promise<void> {
+    setActiveConversationId(null);
+    setMessages([]);
     setError("");
+  }
+
+  async function handleSelectConversation(id: string) {
+    if (isSending) return;
+
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/conversations/${id}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to open conversation");
+      }
+
+      const data = await response.json();
+
+      const loadedMessages: ChatMessageData[] = data.messages.map(
+        (item: {
+          id: string;
+          role: "user" | "assistant";
+          content: string;
+        }) => ({
+          id: item.id,
+          role: item.role,
+          content: item.content,
+          status: "complete",
+        })
+      );
+
+      setActiveConversationId(data.conversation.id);
+      setMessages(loadedMessages);
+      setSelectedModel(data.conversation.model);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to open conversation"
+      );
+    }
+  }
+
+  async function handleDeleteConversation(id: string) {
+    if (isSending) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this conversation?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/conversations/${id}`,
+        { method: "DELETE" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete conversation");
+      }
+
+      setConversations((previous) =>
+        previous.filter((conversation) => conversation.id !== id)
+      );
+
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete conversation"
+      );
+    }
+  }
+
+  async function handleSend(
+    userMessage: string,
+    model: string
+  ): Promise<void> {
+    setError("");
+
     const controller = new AbortController();
     setAbortController(controller);
 
@@ -53,37 +178,67 @@ function App() {
 
     setMessages((previous) => [
       ...previous,
-      { id: userId, role: "user", content: userMessage, status: "complete" },
-      { id: assistantId, role: "assistant", content: "", status: "streaming" },
+      {
+        id: userId,
+        role: "user",
+        content: userMessage,
+        status: "complete",
+      },
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        status: "streaming",
+      },
     ]);
 
     setIsSending(true);
-    const conversationMessages: Array<
-      Pick<ChatMessageData, "role" | "content">
-    > = [
-        ...messages
-          .filter(
-            (item) =>
-              item.status !== "error" &&
-              item.status !== "cancelled" &&
-              item.status !== "streaming" &&
-              item.content.trim().length > 0
-          )
-          .map((item) => ({
-            role: item.role,
-            content: item.content.trim(),
-          })),
 
-        {
-          role: "user",
-          content: userMessage.trim(),
-        },
-      ];
     try {
-      const response = await fetch("http://localhost:3000/message", {
+      let conversationId = activeConversationId;
+
+      if (!conversationId) {
+        const createResponse = await fetch(
+          `${API_URL}/api/conversations`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              title: userMessage.slice(0, 60),
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        if (!createResponse.ok) {
+          const data = await createResponse.json().catch(() => null);
+          throw new Error(data?.error || "Failed to create conversation");
+        }
+
+        const created = await createResponse.json();
+
+        conversationId = created.id;
+        setActiveConversationId(conversationId);
+        setSelectedModel(created.model);
+      }
+
+      const response = await fetch(`${API_URL}/message`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: conversationMessages, model: model }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversationId,
+          messages: [
+            {
+              role: "user",
+              content: userMessage.trim(),
+            },
+          ],
+        }),
         signal: controller.signal,
       });
 
@@ -101,6 +256,7 @@ function App() {
 
       while (true) {
         const { value, done } = await reader.read();
+
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
@@ -122,13 +278,15 @@ function App() {
         previous.map((item) =>
           item.id === assistantId
             ? {
-              ...item,
-              content: item.content + remaining,
-              status: "complete",
-            }
+                ...item,
+                content: item.content + remaining,
+                status: "complete",
+              }
             : item
         )
       );
+
+      await loadConversations();
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         setMessages((previous) =>
@@ -152,43 +310,60 @@ function App() {
           )
         );
       }
+
+      await loadConversations();
     } finally {
       setAbortController(null);
       setIsSending(false);
     }
   }
 
-
   return (
     <main className="app">
       <Header connectionMessage={message} error={error} />
 
-      <section className="workspace">
-        {messages.length === 0 && <Welcome />}
+      <div className="app-body">
+        <ConversationSidebar
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          isLoading={isLoadingConversations}
+          onNewChat={handleNewChat}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+        />
 
-        <ChatWindow messages={messages} isSending={isSending} />
+        <section className="workspace">
+          {messages.length === 0 && <Welcome />}
 
-        <MessageComposer isSending={isSending} onSend={handleSend} selectedModel={selectedModel}
-          onModelChange={setSelectedModel} />
+          <ChatWindow
+            messages={messages}
+            isSending={isSending}
+          />
 
-        {isSending && (
-          <button
-            type="button"
-            onClick={() => abortController?.abort()}
-            className="stop-button"
-          >
-            Stop generating
-          </button>
-        )}
+          <MessageComposer
+            isSending={isSending}
+            onSend={handleSend}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+          />
 
-        {error && (
-          <p className="error-message" role="alert">
-            {error}
-          </p>
-        )}
+          {isSending && (
+            <button
+              type="button"
+              onClick={() => abortController?.abort()}
+              className="stop-button"
+            >
+              Stop generating
+            </button>
+          )}
 
-
-      </section>
+          {error && (
+            <p className="error-message" role="alert">
+              {error}
+            </p>
+          )}
+        </section>
+      </div>
 
       <footer className="footer">
         Built with React, TypeScript and Ollama

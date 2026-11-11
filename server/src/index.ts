@@ -3,13 +3,15 @@ import cors from "cors";
 import messageRoutes from "./routes/message.routes";
 import "dotenv/config"; //This loads .env values into process.env when the backend starts.
 import {checkOllama} from "./services/ai.service";
-
+import "./database/db";
+import conversationRoutes from "./routes/conversation.routes";
 const app = express();
 const PORT = 3000;
 
 app.use(cors());//adds cross-origin response headers
 app.use(express.json({ limit: "100kb" }));//parses incoming JSON request bodies
 
+app.use( conversationRoutes);
 app.use(messageRoutes);
 app.get("/api/health", (_req, res) => {
   res.json({
