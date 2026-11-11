@@ -1,5 +1,7 @@
 
 import { useRef, useState } from "react";
+import { Square ,SendHorizontal} from "lucide-react";
+
 import ModelSelector from "../ModelSelector/ModelSelector";
 import "./messageComposer.scss";
 
@@ -84,9 +86,9 @@ function MessageComposer({
             title={isSending ? "Stop generating" : "Send message"}
           >
             {isSending ? (
-              <span className="stop-icon" aria-hidden="true" />
+              <Square className="stop-icon" aria-hidden="true" />
             ) : (
-              <span aria-hidden="true">↑</span>
+               <SendHorizontal  aria-hidden="true"/>
             )}
           </button>
         </div>

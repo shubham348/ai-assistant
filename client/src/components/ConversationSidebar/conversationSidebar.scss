@@ -45,15 +45,6 @@
   margin-bottom: 27px;
 }
 
-.sidebar-title {
-  padding: 0 9px;
-
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
 
 /* ========================================
    NEW CHAT BUTTON
@@ -324,9 +315,7 @@
     gap: 13px;
   }
 
-  .sidebar-title {
-    font-size: 10px;
-  }
+  
 
   .new-chat-button {
     min-height: 44px;

@@ -1,4 +1,4 @@
-
+import { MessageCircle ,Plus} from "lucide-react";
 import "./conversationSidebar.scss";
 
 export type Conversation = {
@@ -29,16 +29,13 @@ function ConversationSidebar({
   return (
     <aside className="conversation-sidebar">
       <div className="sidebar-header">
-        <span className="sidebar-title">Recent Chats</span>
 
         <button
           type="button"
           className="new-chat-button"
           onClick={onNewChat}
         >
-          <span className="new-chat-icon" aria-hidden="true">
-            +
-          </span>
+          <Plus className="new-chat-icon" aria-hidden="true"/>
           <span className="new-chat-label">New Chat</span>
         </button>
       </div>
@@ -68,18 +65,12 @@ function ConversationSidebar({
               onClick={() => onSelectConversation(conversation.id)}
               title={conversation.title}
             >
-              <svg
+              <MessageCircle
                 className="conversation-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                size={16}
+                strokeWidth={1.7}
                 aria-hidden="true"
-              >
-                <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
-              </svg>
+              />
 
               <span className="conversation-title">
                 {conversation.title}
