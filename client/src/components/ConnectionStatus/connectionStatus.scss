@@ -1,49 +1,14 @@
 
-.status-dot,
+/* Connection status card */
+
 .connection-indicator {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #65d6a0;
   box-shadow: 0 0 10px rgba(101, 214, 160, 0.35);
 }
-
-
-.connection-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 200px;
-  padding: 8px 11px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.025);
-  color: #c7c8d5;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.connection-pill > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.connection-pill.online .status-dot {
-  background: #65d6a0;
-  box-shadow: 0 0 8px rgba(101, 214, 160, 0.35);
-}
-
-.connection-pill.offline {
-  color: #ffaaaa;
-}
-
-.connection-pill.offline .status-dot {
-  background: #ff7777;
-  box-shadow: 0 0 8px rgba(255, 119, 119, 0.3);
-}
-
 
 .connection-card {
   display: flex;
@@ -56,11 +21,6 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(20, 21, 29, 0.75);
-}
-
-.connection-indicator {
-  width: 8px;
-  height: 8px;
 }
 
 .connection-copy {
@@ -107,26 +67,8 @@
   color: #ff9292;
 }
 
-/* Responsive status */
-
 @media (max-width: 600px) {
-  .connection-pill {
-    padding: 7px 8px;
-    font-size: 10px;
-  }
-
   .connection-card {
     padding: 8px 10px;
-  }
-}
-
-@media (max-width: 420px) {
-  .connection-pill {
-    max-width: 34px;
-    padding: 8px;
-  }
-
-  .connection-pill > span:last-child {
-    display: none;
   }
 }
