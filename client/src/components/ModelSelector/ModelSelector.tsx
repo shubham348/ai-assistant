@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-
+import "./modelSelector.scss";
 type ModelsResponse = {
   models: string[];
   defaultModel: string;

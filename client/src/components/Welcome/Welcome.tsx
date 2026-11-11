@@ -1,4 +1,4 @@
-
+import "./Welcome.scss";
 function Welcome() {
   return (
     <div className="welcome">

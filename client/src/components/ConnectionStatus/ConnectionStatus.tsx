@@ -1,4 +1,4 @@
-
+import "./connectionStatus.scss";
 type ConnectionStatusProps = {
   message: string;
   error: string;

@@ -1,4 +1,4 @@
-
+import "./header.scss"
 type HeaderProps = {
   connectionMessage: string;
   error: string;

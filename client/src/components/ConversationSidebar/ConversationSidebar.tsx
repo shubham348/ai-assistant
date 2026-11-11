@@ -1,4 +1,4 @@
-
+import "./conversationSidebar.scss";
 export type Conversation = {
   id: string;
   title: string;

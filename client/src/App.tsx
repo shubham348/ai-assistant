@@ -1,16 +1,16 @@
 
 import { useEffect, useState } from "react";
-import "./App.css";
+import "./App.scss";
 
-import Header from "./components/Header";
-import Welcome from "./components/Welcome";
-import ChatWindow from "./components/ChatWindow";
-import MessageComposer from "./components/MessageComposer";
+import Header from "./components/Header/Header";
+import Welcome from "./components/Welcome/Welcome";
+import ChatWindow from "./components/ChatWindow/ChatWindow";
+import MessageComposer from "./components/MessageComposer/MessageComposer";
 import ConversationSidebar, {
   type Conversation,
-} from "./components/ConversationSidebar";
+} from "./components/ConversationSidebar/ConversationSidebar";
 
-import type { ChatMessageData } from "./components/ChatMessage";
+import type { ChatMessageData } from "./components/ChatMessage/ChatMessage";
 
 const API_URL = "http://localhost:3000";
 
@@ -345,17 +345,8 @@ function App() {
             onSend={handleSend}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-          />
-
-          {isSending && (
-            <button
-              type="button"
-              onClick={() => abortController?.abort()}
-              className="stop-button"
-            >
-              Stop generating
-            </button>
-          )}
+            onStop={() => abortController?.abort()}
+          />  
 
           {error && (
             <p className="error-message" role="alert">

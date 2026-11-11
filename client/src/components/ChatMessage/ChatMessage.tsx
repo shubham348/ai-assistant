@@ -1,7 +1,6 @@
-
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
+import "./chatMessage.scss";
 
 export type ChatMessageData = {
   id: string;

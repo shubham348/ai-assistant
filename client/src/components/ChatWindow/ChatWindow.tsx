@@ -1,6 +1,6 @@
-
 import { useEffect, useRef } from "react";
-import ChatMessage, { type ChatMessageData } from "./ChatMessage";
+import ChatMessage, { type ChatMessageData } from "../ChatMessage/ChatMessage";
+import "./chatWindow.scss";
 
 type ChatWindowProps = {
   messages: ChatMessageData[];

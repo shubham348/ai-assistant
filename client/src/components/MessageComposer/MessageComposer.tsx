@@ -1,15 +1,23 @@
 
 import { useRef, useState } from "react";
-import ModelSelector from "./ModelSelector";
+import ModelSelector from "../ModelSelector/ModelSelector";
+import "./messageComposer.scss";
 
 type MessageComposerProps = {
   isSending: boolean;
   onSend: (message: string, model: string) => Promise<void>;
+  onStop: () => void;
   selectedModel: string;
   onModelChange: (model: string) => void;
 };
 
-function MessageComposer({ isSending, onSend, selectedModel, onModelChange }: MessageComposerProps) {
+function MessageComposer({
+  isSending,
+  onSend,
+  onStop,
+  selectedModel,
+  onModelChange,
+}: MessageComposerProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -35,9 +43,9 @@ function MessageComposer({ isSending, onSend, selectedModel, onModelChange }: Me
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
+
     await onSend(message, selectedModel);
   }
-
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
@@ -56,13 +64,10 @@ function MessageComposer({ isSending, onSend, selectedModel, onModelChange }: Me
           }}
           placeholder="Ask anything"
           rows={1}
-          disabled={isSending}
         />
       </div>
 
       <div className="composer-footer">
-        <span className="composer-hint">+</span>
-
         <div className="composer-actions">
           <ModelSelector
             selectedModel={selectedModel}
@@ -71,18 +76,23 @@ function MessageComposer({ isSending, onSend, selectedModel, onModelChange }: Me
           />
 
           <button
-          className={`send-button ${isSending ? "is-generating" : ""}`}
-            type="submit"
-            disabled={!input.trim() || isSending}
-            aria-label="Send message"
+            className={`send-button ${isSending ? "is-generating" : ""}`}
+            type={isSending ? "button" : "submit"}
+            onClick={isSending ? onStop : undefined}
+            disabled={!isSending && !input.trim()}
+            aria-label={isSending ? "Stop generating" : "Send message"}
+            title={isSending ? "Stop generating" : "Send message"}
           >
-            <span aria-hidden="true">{isSending ? "…" : "↑"}</span>
+            {isSending ? (
+              <span className="stop-icon" aria-hidden="true" />
+            ) : (
+              <span aria-hidden="true">↑</span>
+            )}
           </button>
         </div>
       </div>
     </form>
   );
-
 }
 
 export default MessageComposer;
