@@ -65,13 +65,19 @@ router.post("/message", async (req, res) => {
     }
 
     const config = getConfiguredModels();
-    const selectedModel = conversation?.model as string;
+    const storedModel = conversation.model as string;
 
-    if (!config.models.includes(selectedModel)) {
+    const configuredModel = config.models.find(
+      (item) => item.id === storedModel
+    );
+
+    if (!configuredModel) {
       return res.status(400).json({
         error: "The conversation model is no longer configured",
       });
     }
+
+    const selectedModel = configuredModel.id;
 
     const storedMessages = getMessagesByConversationId(conversationId);
 
@@ -88,31 +94,34 @@ router.post("/message", async (req, res) => {
       },
     ];
 
-    if (selectedModel !== "qwen2.5:3b") {
-      return res.status(400).json({
-        error: "Context management is not yet supported for this model.",
+    let messagesForAI = updatedHistory;
+
+    if (
+      configuredModel.provider === "ollama" &&
+      configuredModel.model === "qwen2.5:3b"
+    ) {
+      const contextResult = await selectContextMessages(updatedHistory, {
+        numCtx: AI_CONFIG.context.numCtx,
+        numPredict: AI_CONFIG.context.numPredict,
+        safetyMargin: AI_CONFIG.context.safetyMargin,
+      });
+
+      if (!contextResult.success) {
+        return res.status(400).json({
+          error: contextResult.error,
+        });
+      }
+
+      messagesForAI = contextResult.messages;
+
+      console.log("Context selection:", {
+        originalMessages: updatedHistory.length,
+        selectedMessages: contextResult.messages.length,
+        tokenCount: contextResult.tokenCount,
+        inputBudget: contextResult.inputBudget,
+        droppedTurns: contextResult.droppedTurns,
       });
     }
-
-    const contextResult = await selectContextMessages(updatedHistory, {
-      numCtx: AI_CONFIG.context.numCtx,
-      numPredict: AI_CONFIG.context.numPredict,
-      safetyMargin: AI_CONFIG.context.safetyMargin,
-    });
-
-    if (!contextResult.success) {
-      return res.status(400).json({
-        error: contextResult.error,
-      });
-    }
-
-    console.log("Context selection:", {
-      originalMessages: updatedHistory.length,
-      selectedMessages: contextResult.messages.length,
-      tokenCount: contextResult.tokenCount,
-      inputBudget: contextResult.inputBudget,
-      droppedTurns: contextResult.droppedTurns,
-    });
 
     createMessage(conversationId, "user", latestMessage.content);
 
@@ -135,7 +144,7 @@ router.post("/message", async (req, res) => {
     let assistantReply = "";
 
     for await (const chunk of streamAssistantReply(
-      contextResult.messages,
+      messagesForAI,
       selectedModel,
       controller.signal
     )) {

@@ -11,7 +11,6 @@ import { getConfiguredModels } from "../services/ai.service";
 
 const router = Router();
 
-// Create a conversation
 router.post("/api/conversations", (req, res) => {
     try {
         const { model, title } = req.body ?? {};
@@ -23,7 +22,11 @@ router.post("/api/conversations", (req, res) => {
                 ? model.trim()
                 : config.defaultModel;
 
-        if (!config.models.includes(selectedModel)) {
+        const configuredModel = config.models.find(
+            (item) => item.id === selectedModel
+        );
+
+        if (!configuredModel) {
             return res.status(400).json({
                 error: "Invalid model selected",
             });
@@ -34,12 +37,12 @@ router.post("/api/conversations", (req, res) => {
                 ? title.trim()
                 : "New conversation";
 
-        const id = createConversation(selectedModel, conversationTitle);
+        const id = createConversation(configuredModel.id, conversationTitle);
 
         return res.status(201).json({
             id,
             title: conversationTitle,
-            model: selectedModel,
+            model: configuredModel.id,
         });
     } catch (error) {
         console.error("Failed to create conversation:", error);
@@ -50,14 +53,11 @@ router.post("/api/conversations", (req, res) => {
     }
 });
 
-// Get all conversations
 router.get("/api/conversations", (_req, res) => {
     try {
         const conversations = getAllConversations();
 
-        return res.json({
-            conversations,
-        });
+        return res.json({ conversations });
     } catch (error) {
         console.error("Failed to fetch conversations:", error);
 
@@ -67,7 +67,6 @@ router.get("/api/conversations", (_req, res) => {
     }
 });
 
-// Get one conversation with its messages
 router.get("/api/conversations/:id", (req, res) => {
     try {
         const { id } = req.params;
@@ -95,7 +94,6 @@ router.get("/api/conversations/:id", (req, res) => {
     }
 });
 
-// Delete one conversation
 router.delete("/api/conversations/:id", (req, res) => {
     try {
         const { id } = req.params;

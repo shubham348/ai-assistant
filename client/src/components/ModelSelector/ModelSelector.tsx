@@ -84,8 +84,8 @@ function ModelSelector({
         )}
 
         {models.map((model) => (
-          <option key={model} value={model}>
-            {model}
+          <option key={model.id} value={model.id}>
+            {model.model}
           </option>
         ))}
       </select>

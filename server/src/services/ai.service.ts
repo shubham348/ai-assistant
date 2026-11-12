@@ -1,6 +1,11 @@
+
 import { AI_CONFIG } from "../config/ai.config";
 
 const OLLAMA_URL = "http://localhost:11434";
+
+// ---------------------------------------------
+// Basic Ollama functions
+// ---------------------------------------------
 
 export async function createAssistantReply(
   message: string
@@ -27,7 +32,6 @@ export async function createAssistantReply(
   }
 
   const data = await response.json();
-
   const reply = data.message?.content;
 
   if (typeof reply !== "string") {
@@ -48,25 +52,52 @@ export async function checkOllama(): Promise<unknown> {
 }
 
 
-export function getConfiguredModels() {
-  const models = (process.env.OLLAMA_MODELS ?? "")
-    .split(",")
-    .map((model) => model.trim())
-    .filter(Boolean);
+export type ConfiguredModel = {
+  id: string;
+  provider: string;
+  model: string;
+};
 
-  const uniqueModels = [...new Set(models)];
+export function getConfiguredModels() {
+  const models = (process.env.AI_MODELS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separatorIndex = entry.indexOf(":");
+
+      if (separatorIndex === -1) {
+        throw new Error(`Invalid model configuration: ${entry}`);
+      }
+
+      const provider = entry.slice(0, separatorIndex);
+      const model = entry.slice(separatorIndex + 1);
+
+      if (!provider || !model) {
+        throw new Error(`Invalid model configuration: ${entry}`);
+      }
+
+      return {
+        id: entry,
+        provider,
+        model,
+      };
+    });
+
+  const uniqueModels = [
+    ...new Map(models.map((item) => [item.id, item])).values(),
+  ];
 
   if (uniqueModels.length === 0) {
-    throw new Error("OLLAMA_MODELS is not configured");
+    throw new Error("AI_MODELS is not configured");
   }
 
-  const configuredDefault =
-    process.env.OLLAMA_DEFAULT_MODEL?.trim();
-
   const defaultModel =
-    configuredDefault && uniqueModels.includes(configuredDefault)
-      ? configuredDefault
-      : uniqueModels[0];
+    process.env.AI_DEFAULT_MODEL?.trim() || uniqueModels[0].id;
+
+  if (!uniqueModels.some((item) => item.id === defaultModel)) {
+    throw new Error("AI_DEFAULT_MODEL is not in AI_MODELS");
+  }
 
   return {
     models: uniqueModels,
@@ -80,7 +111,145 @@ export type ConversationMessage = {
   content: string;
 };
 
-export async function* streamAssistantReply(
+
+
+async function* streamGeminiReply(
+  messages: ConversationMessage[],
+  model: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const geminiModel = model.replace(/^gemini:/, "");
+  const maxRetries = 3;
+
+  let response: Response | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal?.aborted) {
+      throw new Error("Gemini request was cancelled");
+    }
+
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:streamGenerateContent?alt=sse`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          contents: messages.map((message) => ({
+            role: message.role === "assistant" ? "model" : "user",
+            parts: [{ text: message.content }],
+          })),
+          generationConfig: {
+            maxOutputTokens: AI_CONFIG.context.numPredict,
+          },
+        }),
+        signal,
+      }
+    );
+
+    if (response.ok) {
+      break;
+    }
+
+    const retryable = response.status === 503 || response.status === 429;
+
+    if (!retryable || attempt === maxRetries) {
+      const details = await response.text();
+      throw new Error(
+        `Gemini returned HTTP ${response.status}: ${details}`
+      );
+    }
+
+    const delay = 1000 * 2 ** attempt;
+
+    console.log(
+      `Gemini returned HTTP ${response.status}. Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries}).`
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(resolve, delay);
+
+      signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timeout);
+          reject(new Error("Gemini request was cancelled"));
+        },
+        { once: true }
+      );
+    });
+  }
+
+  if (!response?.ok) {
+    throw new Error("Gemini request failed");
+  }
+
+  if (!response.body) {
+    throw new Error("Gemini returned an empty response stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function* extractText(event: string): Generator<string> {
+    const data = event
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .join("\n");
+
+    if (!data || data === "[DONE]") return;
+
+    const chunk = JSON.parse(data);
+    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+
+    for (const part of parts) {
+      if (typeof part.text === "string" && part.text.length > 0) {
+        yield part.text;
+      }
+    }
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+
+      buffer += decoder.decode(value, { stream: !done });
+
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        for (const text of extractText(event)) {
+          yield text;
+        }
+      }
+
+      if (done) break;
+    }
+
+    if (buffer.trim()) {
+      for (const text of extractText(buffer)) {
+        yield text;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+
+
+async function* streamOllamaReply(
   messages: ConversationMessage[],
   model: string,
   signal?: AbortSignal
@@ -118,6 +287,7 @@ export async function* streamAssistantReply(
   const decoder = new TextDecoder();
   let buffer = "";
   let receivedDone = false;
+
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -158,17 +328,51 @@ export async function* streamAssistantReply(
       }
 
       const content = chunk.message?.content;
+
       if (typeof content === "string" && content.length > 0) {
         yield content;
       }
+
       if (chunk.done) {
         receivedDone = true;
       }
-      if (!receivedDone) {
-        throw new Error("Ollama stream ended before generation completed");
-      }
+    }
+
+    if (!receivedDone) {
+      throw new Error(
+        "Ollama stream ended before generation completed"
+      );
     }
   } finally {
     reader.releaseLock();
   }
+}
+
+
+export async function* streamAssistantReply(
+  messages: ConversationMessage[],
+  model: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+
+
+  if (model.startsWith("gemini:")) {
+    yield* streamGeminiReply(messages, model, signal);
+    return;
+  }
+
+ 
+  if (model.startsWith("ollama:")) {
+    const ollamaModel = model.slice("ollama:".length);
+
+    yield* streamOllamaReply(messages, ollamaModel, signal);
+    return;
+  }
+
+
+  if (model.startsWith("groq:")) {
+    throw new Error("Groq integration is not implemented yet.");
+  }
+
+  throw new Error(`Unsupported AI provider: ${model}`);
 }
