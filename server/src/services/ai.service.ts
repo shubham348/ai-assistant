@@ -247,7 +247,106 @@ async function* streamGeminiReply(
   }
 }
 
+async function* streamGroqReply(
+  messages: ConversationMessage[],
+  model: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const apiKey = process.env.GROQ_API_KEY;
 
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is not configured");
+  }
+
+  const groqModel = model.replace(/^groq:/, "");
+
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: groqModel,
+        messages,
+        stream: true,
+        max_tokens: AI_CONFIG.context.numPredict,
+      }),
+      signal,
+    }
+  );
+
+  if (!response.ok) {
+    const details = await response.text();
+
+    throw new Error(
+      `Groq returned HTTP ${response.status}: ${details}`
+    );
+  }
+
+  if (!response.body) {
+    throw new Error("Groq returned an empty response stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+
+      buffer += decoder.decode(value, { stream: !done });
+
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        const data = event
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n");
+
+        if (!data || data === "[DONE]") continue;
+
+        const chunk = JSON.parse(data);
+        const content = chunk.choices?.[0]?.delta?.content;
+
+        if (typeof content === "string" && content.length > 0) {
+          yield content;
+        }
+
+        if (chunk.error) {
+          throw new Error(chunk.error.message || "Groq generation failed");
+        }
+      }
+
+      if (done) break;
+    }
+
+    if (buffer.trim()) {
+      const data = buffer
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+
+      if (data && data !== "[DONE]") {
+        const chunk = JSON.parse(data);
+        const content = chunk.choices?.[0]?.delta?.content;
+
+        if (typeof content === "string" && content.length > 0) {
+          yield content;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 async function* streamOllamaReply(
   messages: ConversationMessage[],
@@ -361,7 +460,7 @@ export async function* streamAssistantReply(
     return;
   }
 
- 
+
   if (model.startsWith("ollama:")) {
     const ollamaModel = model.slice("ollama:".length);
 
@@ -371,7 +470,8 @@ export async function* streamAssistantReply(
 
 
   if (model.startsWith("groq:")) {
-    throw new Error("Groq integration is not implemented yet.");
+    yield* streamGroqReply(messages, model, signal);
+    return;
   }
 
   throw new Error(`Unsupported AI provider: ${model}`);
