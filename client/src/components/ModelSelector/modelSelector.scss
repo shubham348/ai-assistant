@@ -150,3 +150,117 @@
     min-width: 180px;
   }
 }
+
+/* ========================================
+   MODEL SELECTOR MODAL — APP THEME
+======================================== */
+
+.mantine-Modal-content,
+.mantine-Modal-header {
+  background: var(--panel-elevated);
+  color: var(--text-primary);
+}
+
+.mantine-Modal-content {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-elevated);
+}
+
+.mantine-Modal-title {
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+.mantine-Modal-close {
+  color: var(--text-secondary);
+
+  &:hover {
+    background: var(--panel-hover);
+    color: var(--text-primary);
+  }
+}
+
+.mantine-Modal-body {
+  color: var(--text-primary);
+}
+
+/* Search */
+
+.mantine-TextInput-input {
+  background: var(--panel);
+  color: var(--text-primary);
+  border-color: var(--border);
+  border-radius: var(--radius-md);
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+
+  &:focus {
+    border-color: var(--border-accent-focus);
+  }
+}
+
+/* All / Local / Cloud */
+
+.mantine-SegmentedControl-root {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.mantine-SegmentedControl-label {
+  color: var(--text-secondary);
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.mantine-SegmentedControl-indicator {
+  background: var(--panel-active);
+  border: 1px solid var(--border-accent);
+  box-shadow: none;
+}
+
+/* Model rows */
+
+.model-selector-option {
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition: var(--transition-fast);
+
+  &:hover {
+    background: var(--panel-hover);
+    border-color: var(--border);
+  }
+}
+
+/* Selected model */
+
+.model-selector-option[data-variant="light"] {
+  background: var(--accent-soft);
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+
+  &:hover {
+    background: rgba(119, 117, 248, 0.2);
+    border-color: var(--border-accent-focus);
+  }
+}
+
+/* Badges */
+
+.mantine-Badge-root {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Scrollbar */
+
+.mantine-ScrollArea-thumb {
+  background: var(--border-strong);
+}
