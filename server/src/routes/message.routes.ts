@@ -1,25 +1,24 @@
 
-import { Router } from "express";
+import { Router, type Response } from "express";
 import {
   streamAssistantReply,
   getConfiguredModels,
 } from "../services/ai.service.js";
 import { validateConversation } from "../validators/conversation.validator.js";
-import {
-  selectContextMessages,
-} from "../services/context-manager.js";
+import { selectContextMessages } from "../services/context-manager.js";
 import { AI_CONFIG } from "../config/ai.config.js";
-
-import {
-  getConversationById,
-} from "../database/conversation.repository.js";
-
+import { getConversationById } from "../database/conversation.repository.js";
 import {
   createMessage,
   getMessagesByConversationId,
 } from "../database/message.repository.js";
 
 const router = Router();
+
+function sendSse(res: Response, event: string, data: unknown) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
 
 router.get("/models", (_req, res) => {
   try {
@@ -35,26 +34,21 @@ router.get("/models", (_req, res) => {
 router.post("/message", async (req, res) => {
   const { conversationId, messages } = req.body ?? {};
 
-  // Validate conversation ID.
   if (typeof conversationId !== "string" || !conversationId.trim()) {
     return res.status(400).json({
       error: "A valid conversationId is required",
     });
   }
 
-  // Validate incoming messages.
   const validation = validateConversation(messages);
 
   if (!validation.success) {
-    return res.status(400).json({
-      error: validation.error,
-    });
+    return res.status(400).json({ error: validation.error });
   }
 
   const incomingMessages = validation.messages;
   const latestMessage = incomingMessages[incomingMessages.length - 1];
 
-  // Each request must end with a new user message.
   if (!latestMessage || latestMessage.role !== "user") {
     return res.status(400).json({
       error: "The latest message must be from the user",
@@ -62,7 +56,6 @@ router.post("/message", async (req, res) => {
   }
 
   try {
-    // Find the conversation in SQLite.
     const conversation = getConversationById(conversationId);
 
     if (!conversation) {
@@ -72,8 +65,6 @@ router.post("/message", async (req, res) => {
     }
 
     const config = getConfiguredModels();
-
-    // The model saved when the conversation was created is authoritative.
     const selectedModel = conversation?.model as string;
 
     if (!config.models.includes(selectedModel)) {
@@ -82,7 +73,6 @@ router.post("/message", async (req, res) => {
       });
     }
 
-    // Load previous messages from SQLite.
     const storedMessages = getMessagesByConversationId(conversationId);
 
     const conversationHistory = storedMessages.map((message: any) => ({
@@ -90,7 +80,6 @@ router.post("/message", async (req, res) => {
       content: message.content as string,
     }));
 
-    // Add only the latest user message.
     const updatedHistory = [
       ...conversationHistory,
       {
@@ -99,21 +88,17 @@ router.post("/message", async (req, res) => {
       },
     ];
 
-    // Apply the existing context-window management.
     if (selectedModel !== "qwen2.5:3b") {
       return res.status(400).json({
         error: "Context management is not yet supported for this model.",
       });
     }
 
-    const contextResult = await selectContextMessages(
-      updatedHistory,
-      {
-        numCtx: AI_CONFIG.context.numCtx,
-        numPredict: AI_CONFIG.context.numPredict,
-        safetyMargin: AI_CONFIG.context.safetyMargin,
-      }
-    );
+    const contextResult = await selectContextMessages(updatedHistory, {
+      numCtx: AI_CONFIG.context.numCtx,
+      numPredict: AI_CONFIG.context.numPredict,
+      safetyMargin: AI_CONFIG.context.safetyMargin,
+    });
 
     if (!contextResult.success) {
       return res.status(400).json({
@@ -129,12 +114,7 @@ router.post("/message", async (req, res) => {
       droppedTurns: contextResult.droppedTurns,
     });
 
-    // Save the user message before generation.
-    createMessage(
-      conversationId,
-      "user",
-      latestMessage.content
-    );
+    createMessage(conversationId, "user", latestMessage.content);
 
     const controller = new AbortController();
 
@@ -144,44 +124,69 @@ router.post("/message", async (req, res) => {
       }
     });
 
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    res.flushHeaders();
 
     let assistantReply = "";
 
-    // Stream the response and collect the complete answer.
     for await (const chunk of streamAssistantReply(
       contextResult.messages,
       selectedModel,
       controller.signal
     )) {
-      if (res.destroyed) break;
+      if (res.destroyed || controller.signal.aborted) {
+        break;
+      }
 
       assistantReply += chunk;
-      res.write(chunk);
+
+      sendSse(res, "token", { content: chunk });
     }
 
-    // Save only a completed, non-empty assistant response.
-    if (!res.destroyed && !controller.signal.aborted && assistantReply) {
-      createMessage(
-        conversationId,
-        "assistant",
-        assistantReply
-      );
+    if (res.destroyed || controller.signal.aborted) {
+      return;
+    }
+
+    if (!assistantReply.trim()) {
+      sendSse(res, "error", {
+        message: "The AI returned an empty response.",
+      });
 
       res.end();
+      return;
     }
+
+    createMessage(conversationId, "assistant", assistantReply);
+
+    sendSse(res, "done", {
+      completed: true,
+    });
+
+    res.end();
   } catch (error) {
     console.error("Streaming/persistence error:", error);
 
-    if (!res.headersSent) {
-      res.status(502).json({
-        error: "Failed to process the conversation",
-      });
-    } else if (!res.destroyed) {
-      res.destroy(error instanceof Error ? error : undefined);
+    if (res.destroyed || res.writableEnded) {
+      return;
     }
+
+    if (res.headersSent) {
+      sendSse(res, "error", {
+        message: "The AI response could not be completed.",
+      });
+
+      res.end();
+      return;
+    }
+
+    res.status(502).json({
+      error: "Failed to process the conversation",
+    });
   }
 });
 

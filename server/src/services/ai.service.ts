@@ -117,7 +117,7 @@ export async function* streamAssistantReply(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-
+  let receivedDone = false;
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -141,7 +141,10 @@ export async function* streamAssistantReply(
           throw new Error(chunk.error);
         }
 
-        if (chunk.done) return;
+        if (chunk.done) {
+          receivedDone = true;
+          return;
+        }
       }
 
       if (done) break;
@@ -157,6 +160,12 @@ export async function* streamAssistantReply(
       const content = chunk.message?.content;
       if (typeof content === "string" && content.length > 0) {
         yield content;
+      }
+      if (chunk.done) {
+        receivedDone = true;
+      }
+      if (!receivedDone) {
+        throw new Error("Ollama stream ended before generation completed");
       }
     }
   } finally {

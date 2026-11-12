@@ -17,7 +17,7 @@ type ChatMessageProps = {
 function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
 
-  if( message.content.trim() === ""){
+  if (message.content.trim() === "" && message.status !== "cancelled") {
     return null;
   }
 
@@ -36,6 +36,11 @@ function ChatMessage({ message }: ChatMessageProps) {
           </ReactMarkdown>
         )}
       </div>
+      {message.status === "cancelled" && (
+        <span className="message-status">
+          Generation stopped
+        </span>
+      )}
     </article>
   );
 }

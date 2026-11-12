@@ -229,6 +229,7 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+           Accept: "text/event-stream",
         },
         body: JSON.stringify({
           conversationId,
@@ -247,6 +248,12 @@ function App() {
         throw new Error(data?.error || "Failed to get an AI response");
       }
 
+      const contentType = response.headers.get("content-type");
+
+      if (!contentType?.includes("text/event-stream")) {
+        throw new Error("The server did not return an SSE response");
+      }
+
       if (!response.body) {
         throw new Error("The browser did not receive a response stream");
       }
@@ -254,34 +261,103 @@ function App() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      let buffer = "";
+      let assistantContent = "";
+      let receivedDone = false;
+
+      function processSseEvent(eventBlock: string) {
+        let eventType = "message";
+        const dataLines: string[] = [];
+
+        for (const line of eventBlock.split(/\r?\n/)) {
+          if (line.startsWith(":")) continue;
+
+          if (line.startsWith("event:")) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trimStart());
+          }
+        }
+
+        if (dataLines.length === 0) return;
+
+        const payload = JSON.parse(dataLines.join("\n"));
+
+        if (eventType === "token") {
+          if (typeof payload.content !== "string") {
+            throw new Error("Invalid token event received from the server");
+          }
+
+          assistantContent += payload.content;
+
+          setMessages((previous) =>
+            previous.map((item) =>
+              item.id === assistantId
+                ? {
+                    ...item,
+                    content: item.content + payload.content,
+                  }
+                : item
+            )
+          );
+        } else if (eventType === "done") {
+          if (payload.completed !== true) {
+            throw new Error(
+              "The server did not confirm successful completion"
+            );
+          }
+
+          receivedDone = true;
+        } else if (eventType === "error") {
+          throw new Error(
+            payload.message || "The AI response could not be completed"
+          );
+        }
+      }
+
       while (true) {
         const { value, done } = await reader.read();
 
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true });
 
-        if (chunk) {
-          setMessages((previous) =>
-            previous.map((item) =>
-              item.id === assistantId
-                ? { ...item, content: item.content + chunk }
-                : item
-            )
-          );
+        const events = buffer.split(/\r?\n\r?\n/);
+
+        buffer = events.pop() ?? "";
+
+        for (const eventBlock of events) {
+          if (eventBlock.trim()) {
+            processSseEvent(eventBlock);
+          }
         }
       }
 
-      const remaining = decoder.decode();
+      // Flush any remaining bytes from the decoder.
+      buffer += decoder.decode();
+
+      // Process a final event if one remains.
+      if (buffer.trim()) {
+        processSseEvent(buffer);
+      }
+
+      // A closed connection without a done event is incomplete.
+      if (!receivedDone) {
+        throw new Error(
+          "The AI stream ended unexpectedly before completion."
+        );
+      }
+
+      if (!assistantContent.trim()) {
+        throw new Error(
+          "The AI returned an empty response. Please try again."
+        );
+      }
 
       setMessages((previous) =>
         previous.map((item) =>
           item.id === assistantId
-            ? {
-                ...item,
-                content: item.content + remaining,
-                status: "complete",
-              }
+            ? { ...item, status: "complete" }
             : item
         )
       );
@@ -346,7 +422,7 @@ function App() {
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             onStop={() => abortController?.abort()}
-          />  
+          />
 
           {error && (
             <p className="error-message" role="alert">
