@@ -45,7 +45,7 @@ router.get("/models", (_req, res) => {
 router.post("/message", async (req, res) => {
   const { conversationId, messages } = req.body ?? {};
 
-  // 1. Validate conversation ID
+  //Validate conversation ID
   if (typeof conversationId !== "string" || !conversationId.trim()) {
     return res.status(400).json({
       error: "A valid conversationId is required",
@@ -64,7 +64,7 @@ router.post("/message", async (req, res) => {
 
   const incomingMessages = validation.messages;
 
-  // 3. Ensure the latest message is from the user
+  //Ensure the latest message is from the user
   const latestMessage = incomingMessages[incomingMessages.length - 1];
   console.log("Latest user message:", latestMessage);
   if (!latestMessage || latestMessage.role !== "user") {
@@ -74,7 +74,7 @@ router.post("/message", async (req, res) => {
   }
 
   try {
-    // 4. Retrieve conversation
+    //Retrieve conversation
     const conversation:any = getConversationById(conversationId);
 
     if (!conversation) {
@@ -83,7 +83,7 @@ router.post("/message", async (req, res) => {
       });
     }
 
-    // 5. Retrieve configured models
+    //Retrieve configured models
     const config = getConfiguredModels();
 
     const storedModel = conversation?.model;
@@ -119,7 +119,7 @@ router.post("/message", async (req, res) => {
 
     let messagesForAI = updatedHistory;
 
-    // 8. Apply context management for the configured Ollama model
+    //Apply context management for the configured Ollama model
     if (
       configuredModel.provider === "ollama" &&
       configuredModel.model === "qwen2.5:3b"
@@ -137,52 +137,50 @@ router.post("/message", async (req, res) => {
       }
 
       messagesForAI = contextResult.messages;
-
-      console.log("Context selection:", {
-        originalMessages: updatedHistory.length,
-        selectedMessages: contextResult.messages.length,
-        tokenCount: contextResult.tokenCount,
-        inputBudget: contextResult.inputBudget,
-        droppedTurns: contextResult.droppedTurns,
-      });
     }
 
-    // 9. Persist the user message
+    //Persist the user message
     createMessage(conversationId, "user", latestMessage.content);
 
-    // 10. Create abort controller
+   
+    // Abort controller
     const controller = new AbortController();
 
-    // Abort generation if the client disconnects before the response completes
     res.on("close", () => {
+      // A normal completed response shouldn't cancel the generation.
+      // A disconnected client should.
       if (!res.writableEnded) {
         controller.abort();
       }
     });
 
-    // 11. Generate AI response
     const generator = streamAssistantReply(
       messagesForAI,
       selectedModel,
       controller.signal
     );
 
-    // 12. Convert custom generator into AI SDK stream
+    // Convert custom generator into AI SDK stream
     const stream = createAIStreamFromGenerator(
       generator,
-      async (assistantReply) => {
-        // Persist only completed responses when generation wasn't aborted
-        if (!controller.signal.aborted) {
-          createMessage(
-            conversationId,
-            "assistant",
-            assistantReply
-          );
+      async (assistantReply, streamStatus) => {
+        if (!assistantReply.trim()) {
+          return;
         }
-      }
+
+        console.log(`Persisting assistant response: ${streamStatus}`);
+
+        createMessage(
+          conversationId,
+          "assistant",
+          assistantReply,
+          streamStatus
+        );
+      },
+      controller.signal
     );
 
-    // 13. Stream response to client
+    // Response to client
     await pipeUIMessageStreamToResponse({
       response: res,
       stream,
@@ -193,21 +191,19 @@ router.post("/message", async (req, res) => {
         "X-Accel-Buffering": "no",
       },
     });
+
   } catch (error) {
     console.error("Streaming/persistence error:", error);
 
-    // Client may have disconnected
     if (res.destroyed || res.writableEnded) {
       return;
     }
 
-    // Headers were already sent; we can't send a JSON error response
     if (res.headersSent) {
       res.end();
       return;
     }
 
-    // Failure before streaming begins
     return res.status(502).json({
       error: "Failed to process the conversation",
     });

@@ -4,20 +4,27 @@ import { db } from "./db.js";
 
 type MessageRole = "user" | "assistant";
 
+export type MessageStatus = "completed" | "interrupted" | "error";
+
 export function createMessage(
   conversationId: string,
   role: MessageRole,
-  content: string
+  content: string,
+  status: MessageStatus = "completed"
 ) {
+  if (!content.trim()) {
+    return null;
+  }
+
   const id = randomUUID();
 
   const saveMessage = db.transaction(() => {
     const statement = db.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (id, conversation_id, role, content, status)
+      VALUES (?, ?, ?, ?, ?)
     `);
 
-    statement.run(id, conversationId, role, content);
+    statement.run(id, conversationId, role, content, status);
 
     db.prepare(`
       UPDATE conversations
@@ -33,7 +40,7 @@ export function createMessage(
 
 export function getMessagesByConversationId(conversationId: string) {
   const statement = db.prepare(`
-    SELECT id, conversation_id, role, content, created_at
+    SELECT id, conversation_id, role, content, status, created_at
     FROM messages
     WHERE conversation_id = ?
     ORDER BY rowid ASC

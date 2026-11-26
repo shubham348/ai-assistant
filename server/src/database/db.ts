@@ -1,5 +1,4 @@
 
-
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -15,9 +14,7 @@ export const db = new Database(databasePath);
 
 // Enable write-ahead logging.
 db.pragma("journal_mode = WAL");
-
-console.log("SQLite database connected:", databasePath);
-
+db.pragma("foreign_keys = ON");
 
 
 db.exec(`
@@ -30,14 +27,14 @@ db.exec(`
   );
 `);
 
-console.log("Conversations table ready.");
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'completed'
+      CHECK (status IN ('completed', 'interrupted', 'error')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (conversation_id)
@@ -46,9 +43,25 @@ db.exec(`
   );
 `);
 
-console.log("Messages table ready.");
-db.pragma("foreign_keys = ON");
+// Safe migration for databases created before message status existed.
+const messageColumns = db.pragma("table_info(messages)") as Array<{
+  name: string;
+}>;
+
+const hasStatusColumn = messageColumns.some(
+  (column) => column.name === "status"
+);
+
+if (!hasStatusColumn) {
+  db.exec(`
+    ALTER TABLE messages
+    ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';
+  `);
+}
+
+
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
   ON messages(conversation_id);
 `);
+

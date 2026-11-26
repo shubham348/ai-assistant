@@ -1,15 +1,26 @@
+
 import { createUIMessageStream } from "ai";
 
-type OnCompleteCallback = (assistantReply: string) => Promise<void> | void;
+export type AssistantStreamStatus =
+  | "completed"
+  | "interrupted"
+  | "error";
+
+type OnCompleteCallback = (
+  assistantReply: string,
+  status: AssistantStreamStatus
+) => Promise<void> | void;
 
 export function createAIStreamFromGenerator(
   generator: AsyncGenerator<string, void, unknown>,
-  onComplete?: OnCompleteCallback
+  onComplete?: OnCompleteCallback,
+  signal?: AbortSignal
 ) {
   return createUIMessageStream({
     execute: async ({ writer }) => {
       const textId = crypto.randomUUID();
       let assistantReply = "";
+      let streamStatus: AssistantStreamStatus = "completed";
 
       writer.write({
         type: "text-start",
@@ -18,6 +29,11 @@ export function createAIStreamFromGenerator(
 
       try {
         for await (const chunk of generator) {
+          if (signal?.aborted) {
+            streamStatus = "interrupted";
+            break;
+          }
+
           assistantReply += chunk;
 
           writer.write({
@@ -27,17 +43,29 @@ export function createAIStreamFromGenerator(
           });
         }
 
+        if (signal?.aborted) {
+          streamStatus = "interrupted";
+        }
+
         writer.write({
           type: "text-end",
           id: textId,
         });
+      } catch (error) {
+        streamStatus = signal?.aborted
+          ? "interrupted"
+          : "error";
 
-        // Invoke persistence callback after generation completes
-        if (onComplete) {
-          await onComplete(assistantReply);
-        }
+        throw error;
       } finally {
-        await generator.return?.(undefined);
+        try {
+          // Save only meaningful assistant output.
+          if (assistantReply.trim() && onComplete) {
+            await onComplete(assistantReply, streamStatus);
+          }
+        } finally {
+          await generator.return?.(undefined);
+        }
       }
     },
   });
