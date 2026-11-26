@@ -1,9 +1,12 @@
+import { Router } from "express";
+import { pipeUIMessageStreamToResponse } from "ai";
 
-import { Router, type Response } from "express";
 import {
   streamAssistantReply,
   getConfiguredModels,
 } from "../services/ai.service.js";
+
+import { createAIStreamFromGenerator } from "../services/ai-sdk-adapter.js";
 import { validateConversation } from "../validators/conversation.validator.js";
 import { selectContextMessages } from "../services/context-manager.js";
 import { AI_CONFIG } from "../config/ai.config.js";
@@ -15,40 +18,55 @@ import {
 
 const router = Router();
 
-function sendSse(res: Response, event: string, data: unknown) {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
+/**
+ * GET /models
+ *
+ * Returns the currently configured AI models.
+ */
 router.get("/models", (_req, res) => {
   try {
-    res.json(getConfiguredModels());
+    const models = getConfiguredModels();
+
+    return res.json(models);
   } catch (error) {
     console.error("Model configuration error:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       error: "Model configuration is missing or invalid",
     });
   }
 });
 
+/**
+ * POST /message
+ *
+ * Processes a user message and streams the AI response.
+ */
 router.post("/message", async (req, res) => {
   const { conversationId, messages } = req.body ?? {};
 
+  // 1. Validate conversation ID
   if (typeof conversationId !== "string" || !conversationId.trim()) {
     return res.status(400).json({
       error: "A valid conversationId is required",
     });
   }
 
+  // 2. Validate incoming messages
+  console.log("Incoming request body:", JSON.stringify(req.body, null, 2));
   const validation = validateConversation(messages);
-
+  console.log("Validated data:", validation);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error });
+    return res.status(400).json({
+      error: validation.error,
+    });
   }
 
   const incomingMessages = validation.messages;
-  const latestMessage = incomingMessages[incomingMessages.length - 1];
 
+  // 3. Ensure the latest message is from the user
+  const latestMessage = incomingMessages[incomingMessages.length - 1];
+  console.log("Latest user message:", latestMessage);
   if (!latestMessage || latestMessage.role !== "user") {
     return res.status(400).json({
       error: "The latest message must be from the user",
@@ -56,7 +74,8 @@ router.post("/message", async (req, res) => {
   }
 
   try {
-    const conversation = getConversationById(conversationId);
+    // 4. Retrieve conversation
+    const conversation:any = getConversationById(conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -64,8 +83,10 @@ router.post("/message", async (req, res) => {
       });
     }
 
+    // 5. Retrieve configured models
     const config = getConfiguredModels();
-    const storedModel = conversation.model as string;
+
+    const storedModel = conversation?.model;
 
     const configuredModel = config.models.find(
       (item) => item.id === storedModel
@@ -79,13 +100,15 @@ router.post("/message", async (req, res) => {
 
     const selectedModel = configuredModel.id;
 
+    // 6. Retrieve persisted conversation history
     const storedMessages = getMessagesByConversationId(conversationId);
 
-    const conversationHistory = storedMessages.map((message: any) => ({
+    const conversationHistory = storedMessages.map((message:any) => ({
       role: message.role as "user" | "assistant",
       content: message.content as string,
     }));
 
+    // 7. Append the latest user message to the history
     const updatedHistory = [
       ...conversationHistory,
       {
@@ -96,6 +119,7 @@ router.post("/message", async (req, res) => {
 
     let messagesForAI = updatedHistory;
 
+    // 8. Apply context management for the configured Ollama model
     if (
       configuredModel.provider === "ollama" &&
       configuredModel.model === "qwen2.5:3b"
@@ -123,77 +147,68 @@ router.post("/message", async (req, res) => {
       });
     }
 
+    // 9. Persist the user message
     createMessage(conversationId, "user", latestMessage.content);
 
+    // 10. Create abort controller
     const controller = new AbortController();
 
+    // Abort generation if the client disconnects before the response completes
     res.on("close", () => {
       if (!res.writableEnded) {
         controller.abort();
       }
     });
 
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Accel-Buffering", "no");
-
-    res.flushHeaders();
-
-    let assistantReply = "";
-
-    for await (const chunk of streamAssistantReply(
+    // 11. Generate AI response
+    const generator = streamAssistantReply(
       messagesForAI,
       selectedModel,
       controller.signal
-    )) {
-      if (res.destroyed || controller.signal.aborted) {
-        break;
+    );
+
+    // 12. Convert custom generator into AI SDK stream
+    const stream = createAIStreamFromGenerator(
+      generator,
+      async (assistantReply) => {
+        // Persist only completed responses when generation wasn't aborted
+        if (!controller.signal.aborted) {
+          createMessage(
+            conversationId,
+            "assistant",
+            assistantReply
+          );
+        }
       }
+    );
 
-      assistantReply += chunk;
-
-      sendSse(res, "token", { content: chunk });
-    }
-
-    if (res.destroyed || controller.signal.aborted) {
-      return;
-    }
-
-    if (!assistantReply.trim()) {
-      sendSse(res, "error", {
-        message: "The AI returned an empty response.",
-      });
-
-      res.end();
-      return;
-    }
-
-    createMessage(conversationId, "assistant", assistantReply);
-
-    sendSse(res, "done", {
-      completed: true,
+    // 13. Stream response to client
+    await pipeUIMessageStreamToResponse({
+      response: res,
+      stream,
+      status: 200,
+      headers: {
+        "Cache-Control": "no-cache, no-transform",
+        "X-Content-Type-Options": "nosniff",
+        "X-Accel-Buffering": "no",
+      },
     });
-
-    res.end();
   } catch (error) {
     console.error("Streaming/persistence error:", error);
 
+    // Client may have disconnected
     if (res.destroyed || res.writableEnded) {
       return;
     }
 
+    // Headers were already sent; we can't send a JSON error response
     if (res.headersSent) {
-      sendSse(res, "error", {
-        message: "The AI response could not be completed.",
-      });
-
       res.end();
       return;
     }
 
-    res.status(502).json({
+    // Failure before streaming begins
+    return res.status(502).json({
       error: "Failed to process the conversation",
     });
   }

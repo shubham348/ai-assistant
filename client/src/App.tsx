@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 
-import { useEffect, useState } from "react";
 import "./App.scss";
 
 import Header from "./components/Header/Header";
@@ -14,29 +16,89 @@ import type { ChatMessageData } from "./components/ChatMessage/ChatMessage";
 
 const API_URL = "http://localhost:3000";
 
-function createMessageId(): string {
-  return crypto.randomUUID();
+function getMessageText(message: {
+  parts?: Array<{ type: string; text?: string }>;
+}): string {
+  return (
+    message.parts
+      ?.filter((part) => part.type === "text")
+      .map((part) => part.text ?? "")
+      .join("") ?? ""
+  );
 }
 
 function App() {
-  const [message, setMessage] = useState("Connecting to backend...");
+  const [connectionMessage, setConnectionMessage] = useState(
+    "Connecting to backend..."
+  );
+
   const [error, setError] = useState("");
 
-  const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+
   const [activeConversationId, setActiveConversationId] =
     useState<string | null>(null);
 
-  const [isSending, setIsSending] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] =
     useState(false);
 
-  const [abortController, setAbortController] =
-    useState<AbortController | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
 
-  // Load all conversations from SQLite.
+  const transport = useRef(
+    new DefaultChatTransport({
+      api: `${API_URL}/message`,
+
+      prepareSendMessagesRequest: ({ messages }) => {
+        const lastUserMessage = [...messages]
+          .reverse()
+          .find((message) => message.role === "user");
+
+        const content = lastUserMessage?.parts
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("")
+          .trim();
+
+        return {
+          body: {
+            conversationId: conversationIdRef.current,
+            messages: [
+              {
+                role: "user",
+                content,
+              },
+            ],
+          },
+        };
+      },
+    })
+  );
+
+  const {
+    messages: sdkMessages,
+    sendMessage,
+    setMessages,
+    stop,
+    status,
+  } = useChat({
+    transport: transport.current,
+  });
+
+  const isSending = status === "streaming" || status === "submitted";
+
+  // Convert SDK messages into the format used by existing components.
+  const messages: ChatMessageData[] = sdkMessages.map((message) => ({
+    id: message.id,
+    role: message.role as "user" | "assistant",
+    content: getMessageText(message),
+    status: isSending && message.role === "assistant"
+      ? "streaming"
+      : "complete",
+  }));
+
+  // Load conversations from SQLite.
   async function loadConversations() {
     setIsLoadingConversations(true);
 
@@ -59,7 +121,7 @@ function App() {
     }
   }
 
-  // Check backend and load saved conversations.
+  // Initialize application.
   useEffect(() => {
     async function initializeApp() {
       try {
@@ -70,7 +132,8 @@ function App() {
         }
 
         const data = await response.json();
-        setMessage(data.message);
+
+        setConnectionMessage(data.message);
 
         await loadConversations();
       } catch (err) {
@@ -86,11 +149,14 @@ function App() {
   function handleNewChat() {
     if (isSending) return;
 
+    conversationIdRef.current = null;
+
     setActiveConversationId(null);
     setMessages([]);
     setError("");
   }
 
+  // Select an existing conversation.
   async function handleSelectConversation(id: string) {
     if (isSending) return;
 
@@ -107,7 +173,7 @@ function App() {
 
       const data = await response.json();
 
-      const loadedMessages: ChatMessageData[] = data.messages.map(
+      const loadedMessages = data.messages.map(
         (item: {
           id: string;
           role: "user" | "assistant";
@@ -115,10 +181,16 @@ function App() {
         }) => ({
           id: item.id,
           role: item.role,
-          content: item.content,
-          status: "complete",
+          parts: [
+            {
+              type: "text" as const,
+              text: item.content,
+            },
+          ],
         })
       );
+
+      conversationIdRef.current = data.conversation.id;
 
       setActiveConversationId(data.conversation.id);
       setMessages(loadedMessages);
@@ -130,6 +202,7 @@ function App() {
     }
   }
 
+  // Delete a conversation.
   async function handleDeleteConversation(id: string) {
     if (isSending) return;
 
@@ -154,6 +227,8 @@ function App() {
       );
 
       if (activeConversationId === id) {
+        conversationIdRef.current = null;
+
         setActiveConversationId(null);
         setMessages([]);
       }
@@ -164,39 +239,17 @@ function App() {
     }
   }
 
+  // Send a message using the AI SDK.
   async function handleSend(
     userMessage: string,
     model: string
   ): Promise<void> {
     setError("");
 
-    const controller = new AbortController();
-    setAbortController(controller);
-
-    const userId = createMessageId();
-    const assistantId = createMessageId();
-
-    setMessages((previous) => [
-      ...previous,
-      {
-        id: userId,
-        role: "user",
-        content: userMessage,
-        status: "complete",
-      },
-      {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        status: "streaming",
-      },
-    ]);
-
-    setIsSending(true);
-
     try {
-      let conversationId = activeConversationId;
+      let conversationId = conversationIdRef.current;
 
+      // Create a conversation if this is a new chat.
       if (!conversationId) {
         const createResponse = await fetch(
           `${API_URL}/api/conversations`,
@@ -209,194 +262,54 @@ function App() {
               model,
               title: userMessage.slice(0, 60),
             }),
-            signal: controller.signal,
           }
         );
 
         if (!createResponse.ok) {
           const data = await createResponse.json().catch(() => null);
-          throw new Error(data?.error || "Failed to create conversation");
+
+          throw new Error(
+            data?.error || "Failed to create conversation"
+          );
         }
 
         const created = await createResponse.json();
 
         conversationId = created.id;
+
+        conversationIdRef.current = conversationId;
+
         setActiveConversationId(conversationId);
         setSelectedModel(created.model);
       }
 
-      const response = await fetch(`${API_URL}/message`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-           Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
-          conversationId,
-          messages: [
-            {
-              role: "user",
-              content: userMessage.trim(),
-            },
-          ],
-        }),
-        signal: controller.signal,
+      await sendMessage({
+        text: userMessage.trim(),
       });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "Failed to get an AI response");
-      }
-
-      const contentType = response.headers.get("content-type");
-
-      if (!contentType?.includes("text/event-stream")) {
-        throw new Error("The server did not return an SSE response");
-      }
-
-      if (!response.body) {
-        throw new Error("The browser did not receive a response stream");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      let buffer = "";
-      let assistantContent = "";
-      let receivedDone = false;
-
-      function processSseEvent(eventBlock: string) {
-        let eventType = "message";
-        const dataLines: string[] = [];
-
-        for (const line of eventBlock.split(/\r?\n/)) {
-          if (line.startsWith(":")) continue;
-
-          if (line.startsWith("event:")) {
-            eventType = line.slice(6).trim();
-          } else if (line.startsWith("data:")) {
-            dataLines.push(line.slice(5).trimStart());
-          }
-        }
-
-        if (dataLines.length === 0) return;
-
-        const payload = JSON.parse(dataLines.join("\n"));
-
-        if (eventType === "token") {
-          if (typeof payload.content !== "string") {
-            throw new Error("Invalid token event received from the server");
-          }
-
-          assistantContent += payload.content;
-
-          setMessages((previous) =>
-            previous.map((item) =>
-              item.id === assistantId
-                ? {
-                    ...item,
-                    content: item.content + payload.content,
-                  }
-                : item
-            )
-          );
-        } else if (eventType === "done") {
-          if (payload.completed !== true) {
-            throw new Error(
-              "The server did not confirm successful completion"
-            );
-          }
-
-          receivedDone = true;
-        } else if (eventType === "error") {
-          throw new Error(
-            payload.message || "The AI response could not be completed"
-          );
-        }
-      }
-
-      while (true) {
-        const { value, done } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        const events = buffer.split(/\r?\n\r?\n/);
-
-        buffer = events.pop() ?? "";
-
-        for (const eventBlock of events) {
-          if (eventBlock.trim()) {
-            processSseEvent(eventBlock);
-          }
-        }
-      }
-
-      // Flush any remaining bytes from the decoder.
-      buffer += decoder.decode();
-
-      // Process a final event if one remains.
-      if (buffer.trim()) {
-        processSseEvent(buffer);
-      }
-
-      // A closed connection without a done event is incomplete.
-      if (!receivedDone) {
-        throw new Error(
-          "The AI stream ended unexpectedly before completion."
-        );
-      }
-
-      if (!assistantContent.trim()) {
-        throw new Error(
-          "The AI returned an empty response. Please try again."
-        );
-      }
-
-      setMessages((previous) =>
-        previous.map((item) =>
-          item.id === assistantId
-            ? { ...item, status: "complete" }
-            : item
-        )
-      );
 
       await loadConversations();
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
-        setMessages((previous) =>
-          previous.map((item) =>
-            item.id === assistantId
-              ? { ...item, status: "cancelled" }
-              : item
-          )
-        );
-      } else {
-        const errorMessage =
-          err instanceof Error ? err.message : "Something went wrong";
-
-        setError(errorMessage);
-
-        setMessages((previous) =>
-          previous.map((item) =>
-            item.id === assistantId
-              ? { ...item, status: "error" }
-              : item
-          )
-        );
+        return;
       }
 
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong";
+
+      setError(errorMessage);
+
       await loadConversations();
-    } finally {
-      setAbortController(null);
-      setIsSending(false);
     }
   }
 
   return (
     <main className="app">
-      <Header connectionMessage={message} error={error} />
+      <Header
+        connectionMessage={connectionMessage}
+        error={error}
+      />
 
       <div className="app-body">
         <ConversationSidebar
@@ -421,7 +334,7 @@ function App() {
             onSend={handleSend}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-            onStop={() => abortController?.abort()}
+            onStop={stop}
           />
 
           {error && (
