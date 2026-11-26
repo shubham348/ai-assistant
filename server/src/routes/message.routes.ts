@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { pipeUIMessageStreamToResponse } from "ai";
 
@@ -43,19 +44,18 @@ router.get("/models", (_req, res) => {
  * Processes a user message and streams the AI response.
  */
 router.post("/message", async (req, res) => {
-  const { conversationId, messages } = req.body ?? {};
+  const { conversationId, messages, isRetry = false } = req.body ?? {};
 
-  //Validate conversation ID
+  // Validate conversation ID.
   if (typeof conversationId !== "string" || !conversationId.trim()) {
     return res.status(400).json({
       error: "A valid conversationId is required",
     });
   }
 
-  // 2. Validate incoming messages
-  console.log("Incoming request body:", JSON.stringify(req.body, null, 2));
+  // Validate incoming messages.
   const validation = validateConversation(messages);
-  console.log("Validated data:", validation);
+
   if (!validation.success) {
     return res.status(400).json({
       error: validation.error,
@@ -64,18 +64,24 @@ router.post("/message", async (req, res) => {
 
   const incomingMessages = validation.messages;
 
-  //Ensure the latest message is from the user
+  // Ensure the latest message is from the user.
   const latestMessage = incomingMessages[incomingMessages.length - 1];
-  console.log("Latest user message:", latestMessage);
+
   if (!latestMessage || latestMessage.role !== "user") {
     return res.status(400).json({
       error: "The latest message must be from the user",
     });
   }
 
+  if (typeof isRetry !== "boolean") {
+    return res.status(400).json({
+      error: "isRetry must be a boolean",
+    });
+  }
+
   try {
-    //Retrieve conversation
-    const conversation:any = getConversationById(conversationId);
+    // Retrieve conversation.
+    const conversation: any = getConversationById(conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -83,10 +89,10 @@ router.post("/message", async (req, res) => {
       });
     }
 
-    //Retrieve configured models
+    // Retrieve configured models.
     const config = getConfiguredModels();
 
-    const storedModel = conversation?.model;
+    const storedModel = conversation.model;
 
     const configuredModel = config.models.find(
       (item) => item.id === storedModel
@@ -100,31 +106,68 @@ router.post("/message", async (req, res) => {
 
     const selectedModel = configuredModel.id;
 
-    // 6. Retrieve persisted conversation history
-    const storedMessages = getMessagesByConversationId(conversationId);
+    // Retrieve persisted conversation history.
+    const storedMessages: any[] =
+      getMessagesByConversationId(conversationId);
 
-    const conversationHistory = storedMessages.map((message:any) => ({
+    let conversationHistory = storedMessages.map((message: any) => ({
       role: message.role as "user" | "assistant",
       content: message.content as string,
+      status: message.status,
     }));
 
-    // 7. Append the latest user message to the history
-    const updatedHistory = [
-      ...conversationHistory,
-      {
-        role: "user" as const,
-        content: latestMessage.content,
-      },
-    ];
+    let messagesForAI;
 
-    let messagesForAI = updatedHistory;
+    if (isRetry) {
+      // Retry must refer to an already persisted user message.
+      const lastStoredUserMessage = [...storedMessages]
+        .reverse()
+        .find((message: any) => message.role === "user");
 
-    //Apply context management for the configured Ollama model
+      if (
+        !lastStoredUserMessage ||
+        lastStoredUserMessage.content !== latestMessage.content
+      ) {
+        return res.status(400).json({
+          error: "The message to retry was not found in the conversation",
+        });
+      }
+
+      // Remove the previous incomplete assistant response from AI context.
+      const lastStoredMessage = conversationHistory.at(-1);
+
+      if (
+        lastStoredMessage?.role === "assistant" &&
+        lastStoredMessage.status !== "completed"
+      ) {
+        conversationHistory.pop();
+      }
+
+      // The user message is already persisted.
+      messagesForAI = conversationHistory.map(({ role, content }) => ({
+        role,
+        content,
+      }));
+    } else {
+      // Normal message: append the new user message.
+      messagesForAI = [
+        ...conversationHistory.map(({ role, content }) => ({
+          role,
+          content,
+        })),
+        {
+          role: "user" as const,
+          content: latestMessage.content,
+        },
+      ];
+    }
+
+    // Apply context management for the configured Ollama model.
     if (
       configuredModel.provider === "ollama" &&
       configuredModel.model === "qwen2.5:3b"
     ) {
-      const contextResult = await selectContextMessages(updatedHistory, {
+      const contextResult = await selectContextMessages(messagesForAI, {
         numCtx: AI_CONFIG.context.numCtx,
         numPredict: AI_CONFIG.context.numPredict,
         safetyMargin: AI_CONFIG.context.safetyMargin,
@@ -139,11 +182,12 @@ router.post("/message", async (req, res) => {
       messagesForAI = contextResult.messages;
     }
 
-    //Persist the user message
-    createMessage(conversationId, "user", latestMessage.content);
+    // Persist the user message only for a normal request.
+    if (!isRetry) {
+      createMessage(conversationId, "user", latestMessage.content);
+    }
 
-   
-    // Abort controller
+    // Abort controller.
     const controller = new AbortController();
 
     res.on("close", () => {
@@ -160,7 +204,7 @@ router.post("/message", async (req, res) => {
       controller.signal
     );
 
-    // Convert custom generator into AI SDK stream
+    // Convert custom generator into AI SDK stream.
     const stream = createAIStreamFromGenerator(
       generator,
       async (assistantReply, streamStatus) => {
@@ -180,7 +224,7 @@ router.post("/message", async (req, res) => {
       controller.signal
     );
 
-    // Response to client
+    // Response to client.
     await pipeUIMessageStreamToResponse({
       response: res,
       stream,
@@ -191,7 +235,6 @@ router.post("/message", async (req, res) => {
         "X-Accel-Buffering": "no",
       },
     });
-
   } catch (error) {
     console.error("Streaming/persistence error:", error);
 

@@ -51,6 +51,46 @@
   background-clip: padding-box;
 }
 
+
+.retry-container {
+  display: flex;
+  align-items: center;
+  margin: 8px 0 16px;
+}
+
+.retry-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+
+  &:hover {
+    background: rgba(128, 128, 128, 0.12);
+    color: var(--text-color, inherit);
+  }
+
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+
 /* ========================================
    RESPONSIVE
 ======================================== */

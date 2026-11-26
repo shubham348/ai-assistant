@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -32,6 +33,10 @@ function App() {
     "Connecting to backend..."
   );
 
+  const [messageStatuses, setMessageStatuses] = useState<
+    Record<string, ChatMessageData["status"]>
+  >({});
+
   const [error, setError] = useState("");
 
   const [selectedModel, setSelectedModel] = useState("");
@@ -45,6 +50,9 @@ function App() {
     useState(false);
 
   const conversationIdRef = useRef<string | null>(null);
+
+  // Marks the next request as a retry.
+  const retryRef = useRef(false);
 
   const transport = useRef(
     new DefaultChatTransport({
@@ -61,9 +69,14 @@ function App() {
           .join("")
           .trim();
 
+        // Consume the retry flag for this request.
+        const isRetry = retryRef.current;
+        retryRef.current = false;
+
         return {
           body: {
             conversationId: conversationIdRef.current,
+            isRetry,
             messages: [
               {
                 role: "user",
@@ -79,9 +92,12 @@ function App() {
   const {
     messages: sdkMessages,
     sendMessage,
+    regenerate,
     setMessages,
     stop,
     status,
+    error: chatError,
+    clearError,
   } = useChat({
     transport: transport.current,
   });
@@ -93,9 +109,11 @@ function App() {
     id: message.id,
     role: message.role as "user" | "assistant",
     content: getMessageText(message),
-    status: isSending && message.role === "assistant"
-      ? "streaming"
-      : "complete",
+    status:
+      messageStatuses[message.id] ??
+      (isSending && message.role === "assistant"
+        ? "streaming"
+        : "complete"),
   }));
 
   // Load conversations from SQLite.
@@ -150,10 +168,12 @@ function App() {
     if (isSending) return;
 
     conversationIdRef.current = null;
+    retryRef.current = false;
 
     setActiveConversationId(null);
     setMessages([]);
     setError("");
+    clearError();
   }
 
   // Select an existing conversation.
@@ -161,6 +181,8 @@ function App() {
     if (isSending) return;
 
     setError("");
+    clearError();
+    retryRef.current = false;
 
     try {
       const response = await fetch(
@@ -178,6 +200,7 @@ function App() {
           id: string;
           role: "user" | "assistant";
           content: string;
+          status?: string;
         }) => ({
           id: item.id,
           role: item.role,
@@ -188,6 +211,17 @@ function App() {
             },
           ],
         })
+      );
+
+      setMessageStatuses(
+        Object.fromEntries(
+          data.messages.map((item: { id: string; status?: string }) => [
+            item.id,
+            item.status === "interrupted" || item.status === "error"
+              ? item.status
+              : "complete",
+          ])
+        )
       );
 
       conversationIdRef.current = data.conversation.id;
@@ -231,6 +265,7 @@ function App() {
 
         setActiveConversationId(null);
         setMessages([]);
+        clearError();
       }
     } catch (err) {
       setError(
@@ -239,12 +274,14 @@ function App() {
     }
   }
 
-  // Send a message using the AI SDK.
+  // Send a normal message using the AI SDK.
   async function handleSend(
     userMessage: string,
     model: string
   ): Promise<void> {
     setError("");
+    clearError();
+    retryRef.current = false;
 
     try {
       let conversationId = conversationIdRef.current;
@@ -304,6 +341,33 @@ function App() {
     }
   }
 
+  // Retry the last assistant response.
+  async function handleRetry(): Promise<void> {
+    if (isSending || !conversationIdRef.current) return;
+
+    setError("");
+    clearError();
+
+    retryRef.current = true;
+
+    try {
+      await regenerate();
+
+      await loadConversations();
+    } catch (err) {
+      retryRef.current = false;
+
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to retry response";
+
+      setError(errorMessage);
+
+      await loadConversations();
+    }
+  }
+
   return (
     <main className="app">
       <Header
@@ -327,6 +391,7 @@ function App() {
           <ChatWindow
             messages={messages}
             isSending={isSending}
+            onRetry={handleRetry}
           />
 
           <MessageComposer
@@ -337,9 +402,10 @@ function App() {
             onStop={stop}
           />
 
-          {error && (
+          {(error || chatError) && (
             <p className="error-message" role="alert">
-              {error}
+              {error ||
+                "The response couldn't be generated. Please try again."}
             </p>
           )}
         </section>

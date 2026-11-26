@@ -1,13 +1,21 @@
+
 import { useEffect, useRef } from "react";
+import { RotateCcw } from "lucide-react";
+
 import ChatMessage, { type ChatMessageData } from "../ChatMessage/ChatMessage";
 import "./chatWindow.scss";
 
 type ChatWindowProps = {
   messages: ChatMessageData[];
   isSending: boolean;
+  onRetry?: () => void;
 };
 
-function ChatWindow({ messages, isSending }: ChatWindowProps) {
+function ChatWindow({
+  messages,
+  isSending,
+  onRetry,
+}: ChatWindowProps) {
   const chatContainerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -23,6 +31,19 @@ function ChatWindow({ messages, isSending }: ChatWindowProps) {
 
   const isEmpty = messages.length === 0 && !isSending;
 
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+    console.log("here",lastAssistantMessage);
+    
+
+  const canRetry =
+    !isSending &&
+    !!onRetry &&
+    (lastAssistantMessage?.status === "interrupted" ||
+      lastAssistantMessage?.status === "error");
+
   return (
     <section
       ref={chatContainerRef}
@@ -31,16 +52,27 @@ function ChatWindow({ messages, isSending }: ChatWindowProps) {
       aria-live="polite"
     >
       {messages.map((message) => (
-        <ChatMessage
-          key={message.id}
-          message={message}
-        />
+        <ChatMessage key={message.id} message={message} />
       ))}
 
       {isSending && (
         <article className="chat-message assistant">
           <p className="thinking">Generating...</p>
         </article>
+      )}
+
+      {canRetry && (
+        <div className="retry-container">
+          <button
+            type="button"
+            className="retry-icon-button"
+            onClick={onRetry}
+            aria-label="Retry response"
+            title="Retry response"
+          >
+            <RotateCcw size={16} />
+          </button>
+        </div>
       )}
     </section>
   );
