@@ -1,8 +1,4 @@
 
-/* ========================================
-   CHAT MESSAGE BASE
-======================================== */
-
 .chat-message {
   display: flex;
   flex-direction: column;
@@ -16,10 +12,6 @@
   font-size: 15px;
   line-height: 1.85;
 }
-
-/* ========================================
-   USER MESSAGE
-======================================== */
 
 .chat-message.user {
   align-self: flex-end;
@@ -38,17 +30,11 @@
   color: var(--text-primary);
 }
 
-/* ========================================
-   ASSISTANT MESSAGE
-======================================== */
-
 .chat-message.assistant {
   align-self: flex-start;
   width: 100%;
   max-width: 100%;
 }
-
-/* Message role */
 
 .message-role {
   display: flex;
@@ -61,10 +47,6 @@
   letter-spacing: 0.7px;
   text-transform: uppercase;
 }
-
-/* ========================================
-   MARKDOWN CONTENT
-======================================== */
 
 .markdown-content {
   min-width: 0;
@@ -83,13 +65,9 @@
   margin-bottom: 0;
 }
 
-/* Paragraphs */
-
 .markdown-content p {
   margin: 0 0 14px;
 }
-
-/* Headings */
 
 .markdown-content h1,
 .markdown-content h2,
@@ -119,8 +97,6 @@
   font-size: 15px;
 }
 
-/* Lists */
-
 .markdown-content ul,
 .markdown-content ol {
   margin: 10px 0 18px;
@@ -136,8 +112,6 @@
   color: var(--accent);
 }
 
-/* Emphasis */
-
 .markdown-content strong {
   color: var(--text-primary);
   font-weight: 700;
@@ -146,8 +120,6 @@
 .markdown-content em {
   color: var(--text-secondary);
 }
-
-/* Links */
 
 .markdown-content a {
   color: var(--accent-hover);
@@ -159,10 +131,6 @@
 .markdown-content a:hover {
   color: var(--text-primary);
 }
-
-/* ========================================
-   INLINE CODE
-======================================== */
 
 .markdown-content :not(pre) > code {
   padding: 3px 6px;
@@ -176,10 +144,6 @@
   font-family: "Consolas", "Monaco", monospace;
   font-size: 0.88em;
 }
-
-/* ========================================
-   CODE BLOCKS
-======================================== */
 
 .markdown-content pre {
   max-width: 100%;
@@ -208,10 +172,6 @@
   line-height: 1.7;
 }
 
-/* ========================================
-   BLOCKQUOTES
-======================================== */
-
 .markdown-content blockquote {
   margin: 16px 0;
   padding: 10px 16px;
@@ -226,10 +186,6 @@
 .markdown-content blockquote > :last-child {
   margin-bottom: 0;
 }
-
-/* ========================================
-   TABLES
-======================================== */
 
 .markdown-content table {
   display: block;
@@ -246,9 +202,7 @@
 .markdown-content th,
 .markdown-content td {
   padding: 10px 12px;
-
   border: 1px solid var(--border);
-
   text-align: left;
 }
 
@@ -263,20 +217,11 @@
   color: var(--text-secondary);
 }
 
-/* ========================================
-   DIVIDERS
-======================================== */
-
 .markdown-content hr {
   margin: 22px 0;
-
   border: 0;
   border-top: 1px solid var(--border);
 }
-
-/* ========================================
-   IMAGES
-======================================== */
 
 .markdown-content img {
   display: block;
@@ -287,37 +232,6 @@
   border: 1px solid var(--border);
   border-radius: 10px;
 }
-
-/* ========================================
-   RESPONSIVE
-======================================== */
-
-@media (max-width: 560px) {
-  .chat-message {
-    font-size: 14px;
-  }
-
-  .chat-message.user {
-    max-width: 94%;
-    padding: 11px 14px;
-  }
-
-  .markdown-content {
-    font-size: 14px;
-  }
-
-  .markdown-content pre {
-    padding: 12px;
-  }
-
-  .markdown-content pre code {
-    font-size: 12px;
-  }
-}
-
-/* ========================================
-   MESSAGE ACTIONS
-======================================== */
 
 .message-actions {
   display: flex;
@@ -353,7 +267,94 @@
   color: var(--text-primary);
 }
 
-.message-action-button:focus-visible {
+.message-action-button:focus-visible,
+.code-copy-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.code-block-container {
+  margin: 16px 0;
+  overflow: hidden;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  background: var(--bg);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 8px 12px;
+
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-elevated);
+}
+
+.code-block-language {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.code-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 5px 8px;
+
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  font-size: 12px;
+  cursor: pointer;
+
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.code-copy-button:hover {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.code-block-container pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+@media (max-width: 560px) {
+  .chat-message {
+    font-size: 14px;
+  }
+
+  .chat-message.user {
+    max-width: 94%;
+    padding: 11px 14px;
+  }
+
+  .markdown-content {
+    font-size: 14px;
+  }
+
+  .markdown-content pre {
+    padding: 12px;
+  }
+
+  .markdown-content pre code {
+    font-size: 12px;
+  }
 }

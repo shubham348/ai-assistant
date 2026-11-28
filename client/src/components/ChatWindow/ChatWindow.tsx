@@ -1,6 +1,4 @@
-
 import { useEffect, useRef } from "react";
-import { RotateCcw } from "lucide-react";
 
 import ChatMessage, { type ChatMessageData } from "../ChatMessage/ChatMessage";
 import "./chatWindow.scss";
@@ -35,9 +33,6 @@ function ChatWindow({
     .reverse()
     .find((message) => message.role === "assistant");
 
-    console.log("here",lastAssistantMessage);
-    
-
   const canRetry =
     !isSending &&
     !!onRetry &&
@@ -52,27 +47,21 @@ function ChatWindow({
       aria-live="polite"
     >
       {messages.map((message) => (
-        <ChatMessage key={message.id} message={message} />
+        <ChatMessage
+          key={message.id}
+          message={message}
+          onRetry={
+            canRetry && message.id === lastAssistantMessage?.id
+              ? onRetry
+              : undefined
+          }
+        />
       ))}
 
       {isSending && (
         <article className="chat-message assistant">
           <p className="thinking">Generating...</p>
         </article>
-      )}
-
-      {canRetry && (
-        <div className="retry-container">
-          <button
-            type="button"
-            className="retry-icon-button"
-            onClick={onRetry}
-            aria-label="Retry response"
-            title="Retry response"
-          >
-            <RotateCcw size={16} />
-          </button>
-        </div>
       )}
     </section>
   );
