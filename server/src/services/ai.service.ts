@@ -2,6 +2,109 @@
 import { AI_CONFIG } from "../config/ai.config";
 
 const OLLAMA_URL = "http://localhost:11434";
+const REQUEST_TIMEOUT_MS = 30_000;
+const STREAM_INACTIVITY_TIMEOUT_MS = 45_000;
+const GEMINI_MAX_RETRIES = 2;
+const GEMINI_RETRY_BASE_DELAY_MS = 1_000;
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error("Generation was cancelled");
+  }
+}
+
+function createRequestSignal(
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+
+  return signal
+    ? AbortSignal.any([signal, timeoutSignal])
+    : timeoutSignal;
+}
+
+async function readWithTimeout<T>(
+  read: () => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  throwIfAborted(signal);
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `Stream inactive for ${STREAM_INACTIVITY_TIMEOUT_MS / 1000} seconds`
+        )
+      );
+    }, STREAM_INACTIVITY_TIMEOUT_MS);
+
+    if (signal) {
+      abortListener = () => {
+        reject(new Error("Generation was cancelled"));
+      };
+
+      signal.addEventListener("abort", abortListener, {
+        once: true,
+      });
+    }
+  });
+
+  try {
+    return await Promise.race([read(), timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    if (signal && abortListener) {
+      signal.removeEventListener("abort", abortListener);
+    }
+  }
+}
+
+function createRetryDelay(
+  delayMs: number,
+  signal?: AbortSignal
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    throwIfAborted(signal);
+
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+
+    function onAbort() {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new Error("Generation was cancelled"));
+    }
+
+    signal?.addEventListener("abort", onAbort, {
+      once: true,
+    });
+  });
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status === 503 || status === 502 || status === 504;
+}
+
+function getRetryDelay(attempt: number): number {
+  return GEMINI_RETRY_BASE_DELAY_MS * 2 ** attempt;
+}
+
+function throwProviderError(
+  provider: string,
+  status: number,
+  details: string
+): never {
+  throw new Error(`${provider} returned HTTP ${status}: ${details}`);
+}
 
 // ---------------------------------------------
 // Basic Ollama functions
@@ -51,6 +154,9 @@ export async function checkOllama(): Promise<unknown> {
   return response.json();
 }
 
+// ---------------------------------------------
+// Model configuration
+// ---------------------------------------------
 
 export type ConfiguredModel = {
   id: string;
@@ -105,12 +211,32 @@ export function getConfiguredModels() {
   };
 }
 
-
 export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
+// ---------------------------------------------
+// SSE parsing utilities
+// ---------------------------------------------
+
+function extractSSEData(event: string): string | null {
+  const data = event
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("\n");
+
+  return data || null;
+}
+
+function parseSSEJSON(data: string): any {
+  try {
+    return JSON.parse(data);
+  } catch {
+    throw new Error("Provider returned malformed streaming data");
+  }
+}
 
 
 async function* streamGeminiReply(
@@ -125,67 +251,80 @@ async function* streamGeminiReply(
   }
 
   const geminiModel = model.replace(/^gemini:/, "");
-  const maxRetries = 3;
 
   let response: Response | undefined;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (signal?.aborted) {
-      throw new Error("Gemini request was cancelled");
-    }
+  for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+    throwIfAborted(signal);
 
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:streamGenerateContent?alt=sse`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          contents: messages.map((message) => ({
-            role: message.role === "assistant" ? "model" : "user",
-            parts: [{ text: message.content }],
-          })),
-          generationConfig: {
-            maxOutputTokens: AI_CONFIG.context.numPredict,
-          },
-        }),
-        signal,
-      }
+    const requestSignal = createRequestSignal(
+      signal,
+      REQUEST_TIMEOUT_MS
     );
+
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:streamGenerateContent?alt=sse`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify({
+            contents: messages.map((message) => ({
+              role: message.role === "assistant" ? "model" : "user",
+              parts: [{ text: message.content }],
+            })),
+            generationConfig: {
+              maxOutputTokens: AI_CONFIG.context.numPredict,
+            },
+          }),
+          signal: requestSignal,
+        }
+      );
+    } catch (error) {
+      if (signal?.aborted) {
+        throw new Error("Gemini request was cancelled");
+      }
+
+      if (attempt === GEMINI_MAX_RETRIES) {
+        throw new Error(
+          "Gemini could not be reached or the request timed out."
+        );
+      }
+
+      const delay = getRetryDelay(attempt);
+
+      console.warn(
+        `Gemini request failed. Retrying in ${delay}ms (${attempt + 1}/${GEMINI_MAX_RETRIES}).`
+      );
+
+      await createRetryDelay(delay, signal);
+      continue;
+    }
 
     if (response.ok) {
       break;
     }
 
-    const retryable = response.status === 503 || response.status === 429;
+    const retryable = isRetryableStatus(response.status);
 
-    if (!retryable || attempt === maxRetries) {
+    if (!retryable || attempt === GEMINI_MAX_RETRIES) {
       const details = await response.text();
-      throw new Error(
-        `Gemini returned HTTP ${response.status}: ${details}`
-      );
+
+      throwProviderError("Gemini", response.status, details);
     }
 
-    const delay = 1000 * 2 ** attempt;
+    const delay = getRetryDelay(attempt);
 
-    console.log(
-      `Gemini returned HTTP ${response.status}. Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries}).`
+    console.warn(
+      `Gemini returned HTTP ${response.status}. Retrying in ${delay}ms (${attempt + 1}/${GEMINI_MAX_RETRIES}).`
     );
 
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(resolve, delay);
+    await response.body?.cancel().catch(() => undefined);
 
-      signal?.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timeout);
-          reject(new Error("Gemini request was cancelled"));
-        },
-        { once: true }
-      );
-    });
+    await createRetryDelay(delay, signal);
   }
 
   if (!response?.ok) {
@@ -200,28 +339,12 @@ async function* streamGeminiReply(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  function* extractText(event: string): Generator<string> {
-    const data = event
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trim())
-      .join("\n");
-
-    if (!data || data === "[DONE]") return;
-
-    const chunk = JSON.parse(data);
-    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
-
-    for (const part of parts) {
-      if (typeof part.text === "string" && part.text.length > 0) {
-        yield part.text;
-      }
-    }
-  }
-
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } = await readWithTimeout(
+        () => reader.read(),
+        signal
+      );
 
       buffer += decoder.decode(value, { stream: !done });
 
@@ -229,8 +352,32 @@ async function* streamGeminiReply(
       buffer = events.pop() ?? "";
 
       for (const event of events) {
-        for (const text of extractText(event)) {
-          yield text;
+        const data = extractSSEData(event);
+
+        if (!data || data === "[DONE]") continue;
+
+        const chunk = parseSSEJSON(data);
+
+        if (chunk.error) {
+          throw new Error(
+            chunk.error.message || "Gemini streaming failed"
+          );
+        }
+
+        const candidate = chunk.candidates?.[0];
+
+        if (candidate?.finishReason === "SAFETY") {
+          throw new Error(
+            "Gemini stopped generating because of a safety restriction."
+          );
+        }
+
+        const parts = candidate?.content?.parts ?? [];
+
+        for (const part of parts) {
+          if (typeof part.text === "string" && part.text.length > 0) {
+            yield part.text;
+          }
         }
       }
 
@@ -238,14 +385,42 @@ async function* streamGeminiReply(
     }
 
     if (buffer.trim()) {
-      for (const text of extractText(buffer)) {
-        yield text;
+      const data = extractSSEData(buffer);
+
+      if (data && data !== "[DONE]") {
+        const chunk = parseSSEJSON(data);
+
+        if (chunk.error) {
+          throw new Error(
+            chunk.error.message || "Gemini streaming failed"
+          );
+        }
+
+        const parts =
+          chunk.candidates?.[0]?.content?.parts ?? [];
+
+        for (const part of parts) {
+          if (typeof part.text === "string" && part.text.length > 0) {
+            yield part.text;
+          }
+        }
       }
     }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw new Error("Gemini generation was cancelled");
+    }
+
+    throw error;
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
+
+// ---------------------------------------------
+// Groq
+// ---------------------------------------------
 
 async function* streamGroqReply(
   messages: ConversationMessage[],
@@ -259,6 +434,11 @@ async function* streamGroqReply(
   }
 
   const groqModel = model.replace(/^groq:/, "");
+
+  const requestSignal = createRequestSignal(
+    signal,
+    REQUEST_TIMEOUT_MS
+  );
 
   const response = await fetch(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -274,16 +454,14 @@ async function* streamGroqReply(
         stream: true,
         max_tokens: AI_CONFIG.context.numPredict,
       }),
-      signal,
+      signal: requestSignal,
     }
   );
 
   if (!response.ok) {
     const details = await response.text();
 
-    throw new Error(
-      `Groq returned HTTP ${response.status}: ${details}`
-    );
+    throwProviderError("Groq", response.status, details);
   }
 
   if (!response.body) {
@@ -294,9 +472,31 @@ async function* streamGroqReply(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  function processEvent(event: string): string[] {
+    const data = extractSSEData(event);
+    if (!data || data === "[DONE]") return [];
+
+    const chunk = parseSSEJSON(data);
+
+    if (chunk.error) {
+      throw new Error(
+        chunk.error.message || "Groq generation failed"
+      );
+    }
+
+    const content = chunk.choices?.[0]?.delta?.content;
+
+    return typeof content === "string" && content.length > 0
+      ? [content]
+      : [];
+  }
+
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } = await readWithTimeout(
+        () => reader.read(),
+        signal
+      );
 
       buffer += decoder.decode(value, { stream: !done });
 
@@ -304,23 +504,8 @@ async function* streamGroqReply(
       buffer = events.pop() ?? "";
 
       for (const event of events) {
-        const data = event
-          .split("\n")
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trim())
-          .join("\n");
-
-        if (!data || data === "[DONE]") continue;
-
-        const chunk = JSON.parse(data);
-        const content = chunk.choices?.[0]?.delta?.content;
-
-        if (typeof content === "string" && content.length > 0) {
-          yield content;
-        }
-
-        if (chunk.error) {
-          throw new Error(chunk.error.message || "Groq generation failed");
+        for (const text of processEvent(event)) {
+          yield text;
         }
       }
 
@@ -328,31 +513,36 @@ async function* streamGroqReply(
     }
 
     if (buffer.trim()) {
-      const data = buffer
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join("\n");
-
-      if (data && data !== "[DONE]") {
-        const chunk = JSON.parse(data);
-        const content = chunk.choices?.[0]?.delta?.content;
-
-        if (typeof content === "string" && content.length > 0) {
-          yield content;
-        }
+      for (const text of processEvent(buffer)) {
+        yield text;
       }
     }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw new Error("Groq generation was cancelled");
+    }
+
+    throw error;
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
+
+// ---------------------------------------------
+// Ollama
+// ---------------------------------------------
 
 async function* streamOllamaReply(
   messages: ConversationMessage[],
   model: string,
   signal?: AbortSignal
 ): AsyncGenerator<string> {
+  const requestSignal = createRequestSignal(
+    signal,
+    REQUEST_TIMEOUT_MS
+  );
+
   const response = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: "POST",
     headers: {
@@ -367,15 +557,13 @@ async function* streamOllamaReply(
         num_predict: AI_CONFIG.context.numPredict,
       },
     }),
-    signal,
+    signal: requestSignal,
   });
 
   if (!response.ok) {
     const errorDetails = await response.text();
 
-    throw new Error(
-      `Ollama returned HTTP ${response.status}: ${errorDetails}`
-    );
+    throwProviderError("Ollama", response.status, errorDetails);
   }
 
   if (!response.body) {
@@ -387,9 +575,36 @@ async function* streamOllamaReply(
   let buffer = "";
   let receivedDone = false;
 
+  function processLine(line: string): string[] {
+    if (!line.trim()) return [];
+
+    const chunk = parseSSEJSON(line);
+
+    if (chunk.error) {
+      throw new Error(
+        typeof chunk.error === "string"
+          ? chunk.error
+          : chunk.error.message || "Ollama generation failed"
+      );
+    }
+
+    const content = chunk.message?.content;
+
+    if (chunk.done) {
+      receivedDone = true;
+    }
+
+    return typeof content === "string" && content.length > 0
+      ? [content]
+      : [];
+  }
+
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } = await readWithTimeout(
+        () => reader.read(),
+        signal
+      );
 
       buffer += decoder.decode(value, { stream: !done });
 
@@ -397,43 +612,19 @@ async function* streamOllamaReply(
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-
-        const chunk = JSON.parse(line);
-        const content = chunk.message?.content;
-
-        if (typeof content === "string" && content.length > 0) {
-          yield content;
+        for (const text of processLine(line)) {
+          yield text;
         }
 
-        if (chunk.error) {
-          throw new Error(chunk.error);
-        }
-
-        if (chunk.done) {
-          receivedDone = true;
-          return;
-        }
+        if (receivedDone) return;
       }
 
       if (done) break;
     }
 
     if (buffer.trim()) {
-      const chunk = JSON.parse(buffer);
-
-      if (chunk.error) {
-        throw new Error(chunk.error);
-      }
-
-      const content = chunk.message?.content;
-
-      if (typeof content === "string" && content.length > 0) {
-        yield content;
-      }
-
-      if (chunk.done) {
-        receivedDone = true;
+      for (const text of processLine(buffer)) {
+        yield text;
       }
     }
 
@@ -442,24 +633,33 @@ async function* streamOllamaReply(
         "Ollama stream ended before generation completed"
       );
     }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw new Error("Ollama generation was cancelled");
+    }
+
+    throw error;
   } finally {
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
 
+// ---------------------------------------------
+// Provider dispatch
+// ---------------------------------------------
 
 export async function* streamAssistantReply(
   messages: ConversationMessage[],
   model: string,
   signal?: AbortSignal
 ): AsyncGenerator<string> {
-
+  throwIfAborted(signal);
 
   if (model.startsWith("gemini:")) {
     yield* streamGeminiReply(messages, model, signal);
     return;
   }
-
 
   if (model.startsWith("ollama:")) {
     const ollamaModel = model.slice("ollama:".length);
@@ -467,7 +667,6 @@ export async function* streamAssistantReply(
     yield* streamOllamaReply(messages, ollamaModel, signal);
     return;
   }
-
 
   if (model.startsWith("groq:")) {
     yield* streamGroqReply(messages, model, signal);

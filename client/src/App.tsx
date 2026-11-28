@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-
+import { AlertCircle } from "lucide-react";
 import "./App.scss";
 
 import Header from "./components/Header/Header";
@@ -86,45 +86,37 @@ function App() {
   const [isLoadingConversations, setIsLoadingConversations] =
     useState(false);
 
+  // Refs are used only in event handlers, not in the transport callback.
   const conversationIdRef = useRef<string | null>(null);
 
-  // Marks the next request as a retry.
-  const retryRef = useRef(false);
+  const transport = new DefaultChatTransport({
+    api: `${API_URL}/message`,
 
-  const transport = useRef(
-    new DefaultChatTransport({
-      api: `${API_URL}/message`,
+    prepareSendMessagesRequest: ({ messages, body }) => {
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((message) => message.role === "user");
 
-      prepareSendMessagesRequest: ({ messages }) => {
-        const lastUserMessage = [...messages]
-          .reverse()
-          .find((message) => message.role === "user");
+      const content = lastUserMessage?.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("")
+        .trim();
 
-        const content = lastUserMessage?.parts
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("")
-          .trim();
-
-        // Consume the retry flag for this request.
-        const isRetry = retryRef.current;
-        retryRef.current = false;
-
-        return {
-          body: {
-            conversationId: conversationIdRef.current,
-            isRetry,
-            messages: [
-              {
-                role: "user",
-                content,
-              },
-            ],
-          },
-        };
-      },
-    })
-  );
+      return {
+        body: {
+          conversationId: body?.conversationId ?? null,
+          isRetry: body?.isRetry ?? false,
+          messages: [
+            {
+              role: "user",
+              content,
+            },
+          ],
+        },
+      };
+    },
+  });
 
   const {
     messages: sdkMessages,
@@ -136,7 +128,7 @@ function App() {
     error: chatError,
     clearError,
   } = useChat({
-    transport: transport.current,
+    transport,
   });
 
   const isSending = status === "streaming" || status === "submitted";
@@ -201,10 +193,10 @@ function App() {
     if (isSending) return;
 
     conversationIdRef.current = null;
-    retryRef.current = false;
 
     setActiveConversationId(null);
     setMessages([]);
+    setMessageStatuses({});
     setError("");
     clearError();
   }
@@ -215,7 +207,6 @@ function App() {
 
     setError("");
     clearError();
-    retryRef.current = false;
 
     try {
       const response = await fetch(
@@ -248,12 +239,14 @@ function App() {
 
       setMessageStatuses(
         Object.fromEntries(
-          data.messages.map((item: { id: string; status?: string }) => [
-            item.id,
-            item.status === "interrupted" || item.status === "error"
-              ? item.status
-              : "complete",
-          ])
+          data.messages.map(
+            (item: { id: string; status?: string }) => [
+              item.id,
+              item.status === "interrupted" || item.status === "error"
+                ? item.status
+                : "complete",
+            ]
+          )
         )
       );
 
@@ -296,6 +289,7 @@ function App() {
 
         setActiveConversationId(null);
         setMessages([]);
+        setMessageStatuses({});
         clearError();
       }
     } catch (err) {
@@ -310,7 +304,6 @@ function App() {
   ): Promise<void> {
     setError("");
     clearError();
-    retryRef.current = false;
 
     try {
       let conversationId = conversationIdRef.current;
@@ -349,9 +342,17 @@ function App() {
         setSelectedModel(created.model);
       }
 
-      await sendMessage({
-        text: userMessage.trim(),
-      });
+      await sendMessage(
+        {
+          text: userMessage.trim(),
+        },
+        {
+          body: {
+            conversationId,
+            isRetry: false,
+          },
+        }
+      );
 
       await loadConversations();
     } catch (err) {
@@ -364,7 +365,21 @@ function App() {
       await loadConversations();
     }
   }
+  function handleStop(): void {
+    stop();
 
+    const lastAssistantMessage = [...sdkMessages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+
+    if (lastAssistantMessage) {
+      setMessageStatuses((previous) => ({
+        ...previous,
+        [lastAssistantMessage.id]: "interrupted" as ChatMessageData["status"],
+      }));
+    }
+  }
+  
   // Retry the last assistant response.
   async function handleRetry(): Promise<void> {
     if (isSending || !conversationIdRef.current) return;
@@ -372,15 +387,16 @@ function App() {
     setError("");
     clearError();
 
-    retryRef.current = true;
-
     try {
-      await regenerate();
+      await regenerate({
+        body: {
+          conversationId: conversationIdRef.current,
+          isRetry: true,
+        },
+      });
 
       await loadConversations();
     } catch (err) {
-      retryRef.current = false;
-
       setError(getUserFriendlyError(err));
 
       await loadConversations();
@@ -413,20 +429,32 @@ function App() {
             onRetry={handleRetry}
           />
 
+          {(error || chatError) && (
+            <div className="chat-error" role="alert">
+              <div className="chat-error-icon">
+                <AlertCircle size={18} />
+              </div>
+
+              <div className="chat-error-content">
+                <span className="chat-error-title">
+                  Something went wrong
+                </span>
+
+                <p>
+                  {error ||
+                    "The response couldn't be generated. Please try again."}
+                </p>
+              </div>
+            </div>
+          )}
+
           <MessageComposer
             isSending={isSending}
             onSend={handleSend}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-            onStop={stop}
+            onStop={handleStop}
           />
-
-          {(error || chatError) && (
-            <p className="error-message" role="alert">
-              {error ||
-                "The response couldn't be generated. Please try again."}
-            </p>
-          )}
         </section>
       </div>
 
