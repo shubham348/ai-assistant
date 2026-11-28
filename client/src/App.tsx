@@ -28,6 +28,43 @@ function getMessageText(message: {
   );
 }
 
+// Normalize technical errors into user-friendly messages.
+function getUserFriendlyError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Something went wrong. Please try again.";
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (
+    message.includes("failed to fetch") ||
+    message.includes("network error") ||
+    message.includes("networkerror") ||
+    message.includes("fetch failed")
+  ) {
+    return "Couldn't connect to the server. Check your connection and try again.";
+  }
+
+  if (message.includes("timeout") || message.includes("timed out")) {
+    return "The request took too long. Please try again.";
+  }
+
+  if (message.includes("429") || message.includes("rate limit")) {
+    return "The AI service is busy right now. Please wait a moment and try again.";
+  }
+
+  if (
+    message.includes("500") ||
+    message.includes("502") ||
+    message.includes("503") ||
+    message.includes("504")
+  ) {
+    return "The server is temporarily unavailable. Please try again shortly.";
+  }
+
+  return "Something went wrong while processing your request. Please try again.";
+}
+
 function App() {
   const [connectionMessage, setConnectionMessage] = useState(
     "Connecting to backend..."
@@ -131,9 +168,7 @@ function App() {
 
       setConversations(data.conversations);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load conversations"
-      );
+      setError(getUserFriendlyError(err));
     } finally {
       setIsLoadingConversations(false);
     }
@@ -155,9 +190,7 @@ function App() {
 
         await loadConversations();
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Something went wrong"
-        );
+        setError(getUserFriendlyError(err));
       }
     }
 
@@ -230,9 +263,7 @@ function App() {
       setMessages(loadedMessages);
       setSelectedModel(data.conversation.model);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to open conversation"
-      );
+      setError(getUserFriendlyError(err));
     }
   }
 
@@ -268,9 +299,7 @@ function App() {
         clearError();
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to delete conversation"
-      );
+      setError(getUserFriendlyError(err));
     }
   }
 
@@ -330,12 +359,7 @@ function App() {
         return;
       }
 
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Something went wrong";
-
-      setError(errorMessage);
+      setError(getUserFriendlyError(err));
 
       await loadConversations();
     }
@@ -357,12 +381,7 @@ function App() {
     } catch (err) {
       retryRef.current = false;
 
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Failed to retry response";
-
-      setError(errorMessage);
+      setError(getUserFriendlyError(err));
 
       await loadConversations();
     }
