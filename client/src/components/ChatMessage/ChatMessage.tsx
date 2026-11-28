@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./chatMessage.scss";
@@ -14,12 +16,27 @@ type ChatMessageProps = {
   message: ChatMessageData;
 };
 
+
 function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
 
   if (message.content.trim() === "" && message.status !== "cancelled") {
     return null;
   }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy message:", error);
+    }
+  };
 
   return (
     <article className={`chat-message ${message.role}`}>
@@ -36,6 +53,21 @@ function ChatMessage({ message }: ChatMessageProps) {
           </ReactMarkdown>
         )}
       </div>
+
+      {!isUser && (
+        <div className="message-actions">
+          <button
+            type="button"
+            className="message-action-button"
+            onClick={handleCopy}
+            aria-label={copied ? "Response copied" : "Copy response"}
+            title={copied ? "Copied!" : "Copy response"}
+          >
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+          </button>
+        </div>
+      )}
+
       {message.status === "cancelled" && (
         <span className="message-status">
           Generation stopped

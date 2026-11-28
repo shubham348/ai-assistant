@@ -314,3 +314,46 @@
     font-size: 12px;
   }
 }
+
+/* ========================================
+   MESSAGE ACTIONS
+======================================== */
+
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
+
+  border: 1px solid transparent;
+  border-radius: 8px;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  cursor: pointer;
+
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.message-action-button:hover {
+  background: var(--panel-elevated);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.message-action-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
